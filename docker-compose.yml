@@ -1,0 +1,156 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: opensoar
+      POSTGRES_USER: opensoar
+      POSTGRES_PASSWORD: opensoar_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensoar"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - ELASTIC_PASSWORD=elastic_dev
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:elastic_dev http://localhost:9200/_cluster/health | grep -q '\"status\"'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.0
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=kibana_dev
+      - XPACK_SECURITY_ENABLED=true
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=CHANGE_ME_ENCRYPTION_KEY
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # Sets up kibana_system password and creates the soar webhook connector
+  elk-setup:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.17.0
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Set kibana_system password
+        echo "Setting kibana_system password..."
+        curl -s -X POST -u elastic:elastic_dev \
+          "http://elasticsearch:9200/_security/user/kibana_system/_password" \
+          -H "Content-Type: application/json" \
+          -d '{"password":"kibana_dev"}'
+        echo ""
+
+        # Wait for Kibana to be ready
+        echo "Waiting for Kibana..."
+        until curl -s -u elastic:elastic_dev http://kibana:5601/api/status | grep -q '"level":"available"'; do
+          sleep 5
+          echo "  still waiting..."
+        done
+        echo "Kibana is ready!"
+
+        # Create a webhook connector pointing to OpenSOAR
+        echo "Creating OpenSOAR webhook connector in Kibana..."
+        curl -s -X POST -u elastic:elastic_dev \
+          "http://kibana:5601/api/actions/connector" \
+          -H "Content-Type: application/json" \
+          -H "kbn-xsrf: true" \
+          -d '{
+            "connector_type_id": ".webhook",
+            "name": "OpenSOAR",
+            "config": {
+              "url": "http://api:8000/api/v1/webhooks/alerts/elastic",
+              "method": "post",
+              "hasAuth": false,
+              "headers": {"Content-Type": "application/json"}
+            },
+            "secrets": {}
+          }'
+        echo ""
+        echo "Setup complete!"
+    profiles:
+      - setup
+
+  api:
+    build: .
+    command: uvicorn opensoar.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:opensoar_dev@postgres:5432/opensoar
+      REDIS_URL: redis://redis:6379/0
+      PLAYBOOK_DIRS: /app/playbooks
+    volumes:
+      - ./src:/app/src
+      - ./playbooks:/app/playbooks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A opensoar.worker.celery_app worker --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:opensoar_dev@postgres:5432/opensoar
+      REDIS_URL: redis://redis:6379/0
+      PLAYBOOK_DIRS: /app/playbooks
+    volumes:
+      - ./src:/app/src
+      - ./playbooks:/app/playbooks
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:opensoar_dev@postgres:5432/opensoar
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - setup
+
+volumes:
+  pgdata:
+  esdata:

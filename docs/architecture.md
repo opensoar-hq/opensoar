@@ -134,7 +134,7 @@
 
 **Example playbook**:
 ```python
-from soar import playbook, action, Alert, Case
+from opensoar import playbook, action, Alert, Case
 
 @playbook(trigger="elastic.alert", conditions={"severity": "high"})
 async def triage_high_severity(alert: Alert):

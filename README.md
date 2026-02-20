@@ -1,10 +1,10 @@
-# Soar
+# OpenSOAR
 
 **Open-source, Python-native Security Orchestration, Automation, and Response (SOAR) platform.**
 
-Soar is the orchestration and automation layer for the modern open-source SOC stack. It sits between your SIEM (Elastic, Wazuh) and your response tools, letting you write automation logic in plain Python — no sandboxes, no per-action billing, no vendor lock-in.
+OpenSOAR is the orchestration and automation layer for the modern open-source SOC stack. It sits between your SIEM (Elastic, Wazuh) and your response tools, letting you write automation logic in plain Python — no sandboxes, no per-action billing, no vendor lock-in.
 
-## Why Soar?
+## Why OpenSOAR?
 
 - **Python-native** — Playbook actions are regular Python functions. Import anything. No restricted sandbox.
 - **Open source** — Apache 2.0 licensed. Self-hosted. No per-action pricing.
@@ -22,7 +22,7 @@ Soar is the orchestration and automation layer for the modern open-source SOC st
 
 ## Status
 
-🚧 **Pre-development** — Architecture and planning phase.
+Pre-development — Architecture and planning phase.
 
 ## License
 
