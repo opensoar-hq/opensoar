@@ -1,0 +1,11 @@
+.git
+.github
+.vite
+.env
+*.pyc
+__pycache__
+.pytest_cache
+ui/
+docs/
+tests/
+*.md

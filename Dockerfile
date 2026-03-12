@@ -1,26 +1,29 @@
-# ── Stage 1: Build UI ────────────────────────────────────────
-FROM node:22-alpine AS ui-build
-
-WORKDIR /app/ui
-COPY ui/package.json ui/package-lock.json ./
-RUN npm ci --legacy-peer-deps
-COPY ui/ .
-RUN npm run build
-
-# ── Stage 2: Python app ─────────────────────────────────────
-FROM python:3.12-slim
+# ── Base: Python with dependencies ──────────────────────────
+FROM python:3.12-slim AS base
 
 WORKDIR /app
 
 RUN pip install uv
 
-COPY pyproject.toml ./
-RUN uv pip install --system . 2>/dev/null || true
-
-COPY . .
+COPY pyproject.toml uv.lock ./
 RUN uv pip install --system .
 
-# Copy built UI into static directory
-COPY --from=ui-build /app/ui/dist /app/static
+COPY src/ ./src/
+COPY playbooks/ ./playbooks/
+COPY migrations/ ./migrations/
+COPY alembic.ini ./
 
+RUN uv pip install --system .
+
+# ── Target: API server ──────────────────────────────────────
+FROM base AS api
+EXPOSE 8000
 CMD ["uvicorn", "opensoar.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# ── Target: Celery worker ───────────────────────────────────
+FROM base AS worker
+CMD ["celery", "-A", "opensoar.worker.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+
+# ── Target: Database migration ──────────────────────────────
+FROM base AS migrate
+CMD ["alembic", "upgrade", "head"]
