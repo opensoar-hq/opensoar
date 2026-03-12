@@ -3,14 +3,14 @@
 ## Design Principles
 
 1. **Python-native** — Playbook actions are Python functions. No DSL, no sandbox, no restricted stdlib. If you can `pip install` it, you can use it.
-2. **SIEM-agnostic** — First-class support for Elastic Security and Wazuh. Pluggable adapter pattern for other SIEMs.
+2. **SIEM-agnostic** — First-class support for Elastic Security and Wazuh. Pluggable adapter pattern for any SIEM.
 3. **Self-hosted first** — Docker Compose for small deployments, Kubernetes for scale. Cloud offering later.
 4. **Developer experience over enterprise features** — Great DX attracts contributors. Enterprise features come from community scale.
-5. **Modular and composable** — Each component (ingestion, orchestration, case management, enrichment) is independently deployable.
+5. **Modular and composable** — Clean package boundaries enable splitting into separate repos when needed, not before.
 
 ---
 
-## High-Level Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -28,8 +28,8 @@
 │  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────────┘  │
 │         └─────────────────┴──────────────────────┘                  │
 │                            │                                        │
-│                   Alert Normalization                                │
-│                   (common schema)                                    │
+│              Alert Normalization + IOC Extraction                    │
+│              (common schema, severity inference)                     │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
                              ▼
@@ -39,57 +39,55 @@
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │                   Playbook Runtime                           │    │
 │  │                                                             │    │
-│  │  - DAG-based execution (steps can run in parallel)          │    │
-│  │  - Each action = Python function (async supported)          │    │
-│  │  - Full Python environment (any pip package)                │    │
+│  │  - Python-native execution (async functions)                │    │
+│  │  - @playbook and @action decorators                         │    │
+│  │  - Parallel via asyncio.gather(), sequential via await      │    │
 │  │  - Retry/backoff/timeout per action                         │    │
-│  │  - Conditional branching, loops, error handling             │    │
-│  │  - Execution sandboxing via containers (optional, for       │    │
-│  │    untrusted community playbooks)                           │    │
+│  │  - contextvars for automatic run tracking                   │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                                                                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │  Trigger      │  │  Scheduler   │  │  Event Correlation       │  │
-│  │  Engine       │  │  (cron-based) │  │  (dedup, grouping)      │  │
+│  │  Trigger      │  │  Scheduler   │  │  Playbook Registry       │  │
+│  │  Engine       │  │  (APScheduler)│  │  (auto-discover .py)    │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
               ┌──────────────┼──────────────┐
               ▼              ▼              ▼
 ┌──────────────────┐ ┌─────────────┐ ┌──────────────────┐
-│  Case Management │ │  Enrichment │ │  Response Actions │
+│  Alert Mgmt      │ │  Enrichment │ │  Response Actions │
 │                  │ │             │ │                    │
-│  - Cases         │ │  - VT       │ │  - Isolate host   │
-│  - Alerts        │ │  - AbuseIPDB│ │  - Block IP       │
-│  - Tasks         │ │  - Shodan   │ │  - Disable user   │
-│  - Timelines     │ │  - MISP     │ │  - Quarantine     │
-│  - SLA tracking  │ │  - Custom   │ │  - Create ticket  │
-│  - Collaboration │ │             │ │  - Notify          │
+│  - Lifecycle     │ │  - VT       │ │  - Isolate host   │
+│  - Determination │ │  - AbuseIPDB│ │  - Block IP       │
+│  - Partner/MSSP  │ │  - Shodan   │ │  - Disable user   │
+│  - Timeline      │ │  - MISP     │ │  - Create ticket  │
+│  - IOCs          │ │  - Custom   │ │  - Notify (Slack)  │
 └──────────────────┘ └─────────────┘ └──────────────────┘
               │              │              │
               ▼              ▼              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Integration Layer                              │
 │                                                                     │
-│  Each integration = Python package with a standard interface        │
-│  Community-contributed, versioned, tested                           │
+│  Each integration = Python module with standard interface           │
+│  Built-in: Elastic, VT, AbuseIPDB, Slack, Email                   │
+│  Community: via opensoar-integrations repo (future)                 │
 │                                                                     │
 │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐          │
-│  │Elastic │ │ Wazuh  │ │ MISP   │ │ Jira   │ │ Slack  │  ...     │
+│  │Elastic │ │  VT    │ │AbuseIP │ │ Slack  │ │ Email  │  ...     │
 │  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘          │
 └─────────────────────────────────────────────────────────────────────┘
               │
               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         Web UI                                      │
+│                         Web UI (React 19)                           │
 │                                                                     │
 │  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
-│  │ Playbook Canvas │  │ Case Dashboard  │  │ Alert Queue         │   │
-│  │ (visual editor) │  │ (case mgmt)     │  │ (triage view)       │   │
+│  │ Dashboard       │  │ Alert Detail    │  │ Alert Queue         │   │
+│  │ (IR-focused)    │  │ (triage view)   │  │ (bulk ops)          │   │
 │  └────────────────┘  └────────────────┘  └─────────────────────┘   │
 │  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
-│  │ Analytics       │  │ Integration    │  │ Settings &           │   │
-│  │ (dashboards)    │  │ Marketplace    │  │ Administration       │   │
+│  │ Playbook Runs   │  │ Settings       │  │ Login / Auth         │   │
+│  │ (execution log)  │  │ (keys, config)  │  │ (JWT-based)         │   │
 │  └────────────────┘  └────────────────┘  └─────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -100,119 +98,99 @@
 
 ### 1. Ingestion Layer
 
-**Purpose**: Receive alerts from any SIEM and normalize them into a common schema.
+**Purpose**: Receive alerts from any source and normalize them into a common schema.
 
-**Design**:
-- **Webhook receiver** — HTTP endpoint that accepts alert payloads from Elastic, Wazuh, or any tool that can POST JSON. This is the primary real-time integration path.
-- **Polling connectors** — For SIEMs that don't support outbound webhooks, or for batch ingestion. Configurable polling intervals.
-- **Message queue** — For high-volume deployments, alerts flow through a message queue (Redis Streams or NATS) for backpressure handling and reliability.
-- **Alert normalization** — Incoming alerts are mapped to a common schema regardless of source. Each SIEM connector defines its own mapping.
+**Implemented:**
+- **Webhook receiver** (`POST /api/v1/webhooks/alerts`) — Accepts arbitrary JSON, normalizes automatically
+- **Alert normalization** — Extracts title, severity, IPs, hostname, tags, partner from any payload format
+- **Severity inference** — When no explicit severity, infers from event context (process names, auth failures, etc.)
+- **IOC extraction** — Walks the payload tree to extract IPs, domains, hashes, URLs
+- **Partner extraction** — Looks for `partner`, `tenant`, `customer`, `organization` fields
 
-**Key Elastic APIs to integrate**:
-- Detection Rules API (`/api/detection_engine/rules`)
-- Alerts API (`/api/detection_engine/signals`)
-- Cases API (`/api/cases`)
-- Webhook connector (outbound from Elastic to us)
-- Elasticsearch query API (for ad-hoc investigation)
-- Endpoint Management API (response actions)
-
-**Key Wazuh APIs to integrate**:
-- Alerts API
-- Active Response API
-- Agent management API
-- Webhook/syslog forwarding
+**Planned:**
+- Elasticsearch polling connector (scheduled ingestion)
+- Wazuh webhook + polling
+- Message queue consumer for high-volume deployments (Redis Streams / NATS)
 
 ### 2. Orchestration Engine
 
 **Purpose**: Execute playbooks — the core automation logic.
 
-**Design**:
-- **Playbooks are Python** — A playbook is a Python module. Each action is an async function decorated with `@action`. The runtime handles execution order, parallelism, retries, and error handling.
-- **DAG execution** — Actions form a directed acyclic graph. Independent actions run in parallel. Dependencies are explicit.
-- **Visual definition** — Playbooks can be created/edited in the visual Canvas UI and are stored as both visual metadata (for the UI) and executable Python (for the runtime). Changes in either are kept in sync.
-- **Config-as-code** — Playbooks can also be defined entirely in code and version-controlled in Git. The UI renders them for visualization.
+**Implemented:**
+- **`@playbook` decorator** — Self-registers at import time, defines trigger conditions
+- **`@action` decorator** — Wraps functions with timeout, retry, backoff metadata; tracks execution via contextvars
+- **PlaybookRegistry** — Discovers playbooks by importing `.py` files from configured directories, syncs to DB
+- **PlaybookExecutor** — Creates run record, sets contextvars, executes async function, records action results
+- **TriggerEngine** — Matches alerts to playbooks by evaluating field conditions (severity thresholds, source matching)
+- **Scheduler** — APScheduler for cron-based triggers
 
-**Example playbook**:
-```python
-from opensoar import playbook, action, Alert, Case
+**Key design decision**: Implicit DAG via Python async. `asyncio.gather()` = parallelism, `await` = sequential. No DAG definition language.
 
-@playbook(trigger="elastic.alert", conditions={"severity": "high"})
-async def triage_high_severity(alert: Alert):
+### 3. Alert Management
 
-    # Enrich — runs in parallel
-    vt_result, abuse_result = await asyncio.gather(
-        enrich_virustotal(alert.iocs),
-        enrich_abuseipdb(alert.source_ip),
-    )
+**Purpose**: Full alert lifecycle from ingestion to resolution.
 
-    # Score
-    risk = calculate_risk(alert, vt_result, abuse_result)
-
-    if risk > 0.8:
-        # Create case and respond
-        case = await Case.create(
-            title=f"High-risk alert: {alert.rule_name}",
-            severity="critical",
-            alerts=[alert],
-            enrichment={"virustotal": vt_result, "abuseipdb": abuse_result},
-        )
-        await isolate_host(alert.hostname)
-        await notify_slack(channel="#soc", case=case)
-    else:
-        await alert.close(reason="auto-triaged", enrichment=vt_result)
-```
-
-### 3. Case Management
-
-**Purpose**: Track incidents from detection through resolution. Replaces TheHive.
-
-**Features**:
-- Cases with alerts, observables, tasks, and timelines
-- Task assignment and SLA tracking
-- Collaboration (comments, attachments, @mentions)
-- Observable tracking (IPs, domains, hashes, emails) with enrichment status
-- Case templates for common incident types
-- Metrics and reporting (MTTD, MTTR, case volume, analyst workload)
+**Implemented:**
+- Alert CRUD with filtering (severity, status, source, partner, determination)
+- Lifecycle: `new` → `in_progress` → `resolved`
+- Determination field: `unknown`, `malicious`, `suspicious`, `benign` (required for resolution)
+- Partner field for MSSP tenant attribution
+- Claim/assign/reassign workflow
+- Duplicate detection and counting
+- Activity timeline (unified comments + system events)
+- Comment editing with edit history
 
 ### 4. Integration Layer
 
 **Purpose**: Connect to external tools and services.
 
-**Design**:
-- Each integration is a **Python package** that implements a standard interface
-- Integrations are versioned and can be installed via pip
-- Community integrations live in a separate repo (like Terraform providers)
-- Standard interface: `connect()`, `health_check()`, `actions()`, `triggers()`
+**Implemented:**
+- `IntegrationBase` ABC — `connect()`, `health_check()`, `get_actions()`
+- Elastic Security connector (alert normalization)
+- VirusTotal (hash/IP/domain/URL lookup)
+- AbuseIPDB (IP reputation)
+- Slack (channel notifications)
+- Email (SMTP)
 
-**Priority integrations** (Phase 1):
-| Integration | Type | Purpose |
-|------------|------|---------|
-| Elastic Security | SIEM | Alert ingestion, case sync, response actions |
-| Wazuh | SIEM/XDR | Alert ingestion, active response |
-| VirusTotal | Enrichment | File/URL/IP reputation |
-| AbuseIPDB | Enrichment | IP reputation |
-| MISP | Threat Intel | IOC lookup and sharing |
-| Slack | Notification | Alert/case notifications |
-| Jira / ServiceNow | Ticketing | Ticket creation and sync |
-| Email (SMTP/IMAP) | Notification + Ingestion | Alerts, phishing analysis |
+**Future (opensoar-sdk):**
+- Standalone SDK package for integration authors
+- Integration manifest format (YAML)
+- Dynamic loading from configured directories
+- Community integration repository
 
-### 5. Web UI
+### 5. Worker Layer
 
-**Purpose**: Visual interface for playbook building, case management, alert triage, and administration.
+**Purpose**: Async playbook execution with reliability.
 
-**Tech stack** (proposed):
-- **Frontend**: React + TypeScript
-- **Playbook Canvas**: React Flow (node-based visual editor)
-- **State management**: Zustand or TanStack Query
-- **Design system**: Shadcn/ui (clean, accessible, customizable)
+**Implemented:**
+- Celery with Redis broker
+- `execute_playbook_task(playbook_name, alert_id)` task
+- Automatic retry on transient failures
+- Run status tracking (pending → running → success/failed)
+- Action result recording with timing and I/O data
 
-**Key views**:
-- **Playbook Canvas** — Drag-and-drop playbook builder with live Python preview
-- **Alert Queue** — Filterable, sortable triage view with bulk actions
-- **Case Dashboard** — Case lifecycle management with timeline view
-- **Analytics** — SOC metrics dashboards (MTTD, MTTR, alert volume, analyst workload)
-- **Integration Marketplace** — Browse, install, and configure integrations
-- **Admin** — User management, RBAC, audit logs, system health
+### 6. API Layer
+
+**Purpose**: REST API for all operations.
+
+**Implemented:**
+- FastAPI with auto-generated OpenAPI spec
+- JWT authentication (login, token refresh)
+- API key authentication (for integrations/webhooks)
+- Endpoints: alerts, playbooks, runs, actions, activities, dashboard, integrations, settings
+- Pydantic v2 request/response validation
+
+### 7. Web UI
+
+**Purpose**: Analyst-facing interface optimized for triage workflows.
+
+**Implemented:**
+- React 19 + TypeScript + Vite + Tailwind CSS v4
+- Custom component library (Card, Dialog, Drawer, Toast, Table, Tabs, Sidebar, etc.)
+- framer-motion animations throughout
+- TanStack Query for data fetching
+- Pages: Dashboard, Alerts List, Alert Detail, Playbooks, Runs, Run Detail, Settings, Login
+- Dark theme (SOC-optimized)
 
 ---
 
@@ -220,37 +198,58 @@ async def triage_high_severity(alert: Alert):
 
 | Layer | Technology | Why |
 |-------|-----------|-----|
-| **API** | Python, FastAPI | Async-native, great DX, strong typing, massive ecosystem |
-| **Task execution** | Celery + Redis or Temporal | Reliable async task execution with retries. Temporal for complex workflows if needed |
-| **Database** | PostgreSQL | Reliable, feature-rich, JSON support for flexible schemas |
-| **Cache / Queue** | Redis | Pub/sub, caching, rate limiting, lightweight queue |
-| **Search** | PostgreSQL full-text (start), Elasticsearch (scale) | Start simple, add dedicated search engine when needed |
-| **Frontend** | React, TypeScript, React Flow | Visual playbook builder, rich UI |
-| **Deployment** | Docker Compose (dev/small), Kubernetes (production) | Progressive complexity |
+| **API** | Python 3.12, FastAPI | Async-native, great DX, strong typing |
+| **ORM** | SQLAlchemy 2.0 (async) + asyncpg | Async ORM, PostgreSQL-native |
+| **Migrations** | Alembic | Industry standard for SQLAlchemy |
+| **Task Queue** | Celery + Redis | Reliable async execution, horizontal scaling |
+| **Database** | PostgreSQL 16 | Reliable, JSON support, full-text search |
+| **Cache/Queue** | Redis 7 | Broker, caching, pub/sub |
+| **Frontend** | React 19, TypeScript, Vite | Fast dev, strong typing |
+| **Styling** | Tailwind CSS v4 | Utility-first, dark theme via CSS vars |
+| **Animation** | framer-motion | Spring physics, AnimatePresence |
+| **Data Fetching** | TanStack Query | Caching, optimistic updates, refetch |
+| **Deployment** | Docker Compose | Single-command full stack |
+
+---
+
+## Multi-Repository Architecture (Planned)
+
+As the project grows, components will split into separate repos under the `opensoar-hq` GitHub org:
+
+| Repository | Purpose | License | When to split |
+|------------|---------|---------|---------------|
+| **opensoar** | Core platform + UI | Apache 2.0 | Now (this repo) |
+| **opensoar-sdk** | Python SDK for integration authors | Apache 2.0 | First external contributor |
+| **opensoar-integrations** | Community integration packs | Apache 2.0 | 5+ integrations beyond built-in |
+| **opensoar-ee** | Enterprise features (RBAC, SSO, audit) | BSL 1.1 | First enterprise customer |
+| **opensoar-ai** | AI features (triage, correlation, NL playbooks) | Proprietary | AI prototype working |
+| **opensoar-cloud** | SaaS infrastructure + billing | Proprietary | SaaS beta launch |
+
+See [Repository Structure](repository-structure.md) for full details.
 
 ---
 
 ## Deployment Models
 
-### Small / Dev (Docker Compose)
-```
-docker compose up
+### Development / Small Team (Docker Compose)
+```bash
+docker compose up -d
 ```
 Single-node deployment with all services. Good for teams up to ~10 analysts, ~1,000 alerts/day.
 
-### Production (Kubernetes)
-Horizontally scalable. Separate worker pools for different playbook priorities. HA PostgreSQL. Good for enterprises, MSSPs, and high-volume environments.
+### Production (Kubernetes) — Planned
+Horizontally scalable. Separate worker pools for different playbook priorities. HA PostgreSQL. For enterprises, MSSPs, and high-volume environments.
 
-### Air-gapped
-Container images available for offline installation. No external dependencies required at runtime (threat intel feeds can be loaded via file import).
+### Air-gapped — Planned
+Container images for offline installation. No external dependencies at runtime. Threat intel feeds loadable via file import.
 
 ---
 
 ## Security Considerations
 
-- **RBAC** — Role-based access control for all resources (playbooks, cases, integrations, admin)
-- **Audit logging** — All actions logged with user, timestamp, and details
-- **Secrets management** — Integration credentials stored encrypted, never in playbook code. Support for external vaults (HashiCorp Vault, AWS Secrets Manager)
-- **Playbook sandboxing** — Optional container-based isolation for untrusted community playbooks
-- **API authentication** — API keys + OAuth2/OIDC for SSO integration
-- **Network isolation** — Worker nodes can be deployed in isolated networks with limited egress
+- **JWT + API key auth** — JWT for UI sessions, API keys for integrations
+- **Secrets management** — Integration credentials stored encrypted (Vault/AWS SM planned)
+- **Audit trail** — Activity timeline records all analyst actions
+- **Input validation** — Pydantic v2 on all API boundaries
+- **RBAC** — Planned for Enterprise edition
+- **SSO** — SAML/OIDC planned for Enterprise edition
