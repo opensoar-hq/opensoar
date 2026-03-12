@@ -8,4 +8,5 @@ __pycache__
 ui/
 docs/
 tests/
-*.md
+docs/*.md
+CHANGELOG.md
