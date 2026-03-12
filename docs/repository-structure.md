@@ -2,7 +2,8 @@
 
 ## GitHub Organization
 
-**Organization**: github.com/opensoar-app (mirrors opensoar.app domain)
+**Organization**: [github.com/opensoar-hq](https://github.com/opensoar-hq)
+**Domain**: opensoar.app
 
 ## Repositories
 
@@ -20,12 +21,17 @@ opensoar/
 │   ├── models/            # SQLAlchemy models
 │   ├── schemas/           # Pydantic schemas
 │   └── worker/            # Celery tasks
-├── ui/                    # React frontend
 ├── migrations/            # Alembic migrations
 ├── playbooks/examples/    # Example playbooks
-├── docker-compose.yml
-└── Dockerfile
+├── .github/workflows/     # CI: test + build Docker images
+├── Dockerfile             # Multi-target: api, worker, migrate
+└── .dockerignore
 ```
+
+**Docker images** (built by CI, pushed to GHCR):
+- `ghcr.io/opensoar-hq/opensoar:api-latest`
+- `ghcr.io/opensoar-hq/opensoar:worker-latest`
+- `ghcr.io/opensoar-hq/opensoar:migrate-latest`
 
 **License**: Apache 2.0
 
@@ -181,17 +187,30 @@ opensoar-cloud/
 
 ---
 
-## When to Split
+### opensoar-deploy (created)
+Deployment configurations — Docker Compose, Helm charts, environment templates.
 
-Don't split prematurely. Current priority:
+```
+opensoar-deploy/
+├── docker-compose.yml      # Production: pulls images from GHCR
+├── docker-compose.dev.yml  # Dev: mounts source, hot reload
+├── .env.example
+└── README.md
+```
 
-| Repo | When to create | Trigger |
-|------|---------------|---------|
-| opensoar | Now (exists) | — |
-| opensoar-sdk | When first external contributor wants to build an integration | Community need |
-| opensoar-integrations | When we have 5+ integrations beyond the built-in set | Volume |
-| opensoar-ee | When first enterprise customer needs RBAC/SSO | Revenue |
-| opensoar-ai | When AI triage prototype is working | Product validation |
-| opensoar-cloud | When SaaS beta launches | Go-to-market |
+**License**: Apache 2.0
 
-For now, keep everything in the main `opensoar` repo with clean package boundaries so splitting is a mechanical operation, not a refactor.
+---
+
+## Repository Status
+
+| Repo | Status | CI | Artifact |
+|------|--------|-----|----------|
+| opensoar | ✅ Created | Build + test → GHCR (api/worker/migrate images) | `ghcr.io/opensoar-hq/opensoar` |
+| opensoar-ui | ✅ Created | Build + test → GHCR (nginx image) | `ghcr.io/opensoar-hq/opensoar-ui` |
+| opensoar-sdk | ✅ Created | Test (3.11/3.12/3.13) → PyPI on tag | `pypi.org/project/opensoar-sdk` |
+| opensoar-integrations | ✅ Created | Test → PyPI on tag | `pypi.org/project/opensoar-integrations` |
+| opensoar-deploy | ✅ Created | — | Config only |
+| opensoar-ee | Future | — | Plugin package |
+| opensoar-ai | Future | — | Plugin package |
+| opensoar-cloud | Future | — | Private infra |
