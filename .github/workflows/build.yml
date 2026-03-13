@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: opensoar-hq/opensoar
+  IMAGE_NAME: opensoar-hq/opensoar-core
 
 jobs:
   build:

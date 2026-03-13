@@ -56,8 +56,8 @@ Built for IR analysts and MSSPs. Dark-themed, fast, opinionated.
 
 ```bash
 # Clone and start
-git clone https://github.com/opensoar-hq/opensoar.git
-cd opensoar
+git clone https://github.com/opensoar-hq/opensoar-core.git
+cd opensoar-core
 docker compose up -d
 
 # Send a test alert

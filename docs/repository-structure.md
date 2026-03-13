@@ -29,9 +29,9 @@ opensoar/
 ```
 
 **Docker images** (built by CI, pushed to GHCR):
-- `ghcr.io/opensoar-hq/opensoar:api-latest`
-- `ghcr.io/opensoar-hq/opensoar:worker-latest`
-- `ghcr.io/opensoar-hq/opensoar:migrate-latest`
+- `ghcr.io/opensoar-hq/opensoar-core:api-latest`
+- `ghcr.io/opensoar-hq/opensoar-core:worker-latest`
+- `ghcr.io/opensoar-hq/opensoar-core:migrate-latest`
 
 **License**: Apache 2.0
 
@@ -206,7 +206,7 @@ opensoar-deploy/
 
 | Repo | Status | CI | Artifact |
 |------|--------|-----|----------|
-| opensoar | ✅ Created | Build + test → GHCR (api/worker/migrate images) | `ghcr.io/opensoar-hq/opensoar` |
+| opensoar-core | ✅ Created | Build + test → GHCR (api/worker/migrate images) | `ghcr.io/opensoar-hq/opensoar-core` |
 | opensoar-ui | ✅ Created | Build + test → GHCR (nginx image) | `ghcr.io/opensoar-hq/opensoar-ui` |
 | opensoar-sdk | ✅ Created | Test (3.11/3.12/3.13) → PyPI on tag | `pypi.org/project/opensoar-sdk` |
 | opensoar-integrations | ✅ Created | Test → PyPI on tag | `pypi.org/project/opensoar-integrations` |
