@@ -37,5 +37,5 @@ jobs:
           target: ${{ matrix.target }}
           push: ${{ github.event_name == 'push' }}
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.target }}-latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.target }}-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.target }}:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.target }}:${{ github.sha }}
