@@ -53,7 +53,7 @@ function SeverityBar({ data }: { data: Record<string, number> }) {
     critical: 'var(--color-critical)',
     high: 'var(--color-danger)',
     medium: 'var(--color-warning)',
-    low: 'var(--color-accent)',
+    low: 'var(--color-info)',
   }
   return (
     <div>
@@ -156,7 +156,7 @@ export function DashboardPage() {
               value={data.alerts_today}
               sub={`${data.total_alerts} total`}
               icon={<Inbox size={16} />}
-              color="var(--color-accent)"
+              color="var(--color-heading)"
               to="/alerts"
             />
           </StaggerChild>
@@ -175,7 +175,7 @@ export function DashboardPage() {
               value={data.active_runs}
               sub={`${data.total_runs} total`}
               icon={<Zap size={16} />}
-              color="var(--color-accent)"
+              color="var(--color-heading)"
               to="/runs"
             />
           </StaggerChild>
@@ -258,7 +258,7 @@ export function DashboardPage() {
                       const total = data.total_alerts || 1
                       const pct = Math.round((count / total) * 100)
                       const colors: Record<string, string> = {
-                        new: 'var(--color-accent)',
+                        new: 'var(--color-info)',
                         in_progress: 'var(--color-warning)',
                         resolved: 'var(--color-success)',
                       }
@@ -389,7 +389,7 @@ export function DashboardPage() {
                         ? <CheckCircle size={13} className="text-success shrink-0" />
                         : run.status === 'failed'
                           ? <XCircle size={13} className="text-danger shrink-0" />
-                          : <Play size={13} className="text-accent shrink-0" />}
+                          : <Play size={13} className="text-info shrink-0" />}
                       <span className="text-sm text-heading flex-1 truncate">{run.playbook_id.slice(0, 8)}</span>
                       <StatusBadge status={run.status} />
                       <span className="text-[11px] text-muted whitespace-nowrap">{timeAgo(run.created_at)}</span>

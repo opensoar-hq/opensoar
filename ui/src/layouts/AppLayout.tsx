@@ -30,18 +30,17 @@ function SidebarContent() {
     <>
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-2 py-1 mb-2">
-        <div className="w-5 h-5 rounded-md bg-accent flex items-center justify-center flex-shrink-0">
-          <ShieldCheck size={12} className="text-bg" />
-        </div>
+        <ShieldCheck size={18} className="text-heading flex-shrink-0" />
         <motion.span
           animate={{
             display: animate ? (open ? 'inline-block' : 'none') : 'inline-block',
             opacity: animate ? (open ? 1 : 0) : 1,
           }}
           transition={{ duration: 0.15 }}
-          className="font-semibold text-[15px] text-heading tracking-tight whitespace-pre select-none"
+          className="text-[15px] text-heading whitespace-pre select-none"
+          style={{ fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em' }}
         >
-          OpenSOAR
+          <span style={{ fontWeight: 400 }}>Open</span><span style={{ fontWeight: 700 }}>SOAR</span>
         </motion.span>
       </div>
 
@@ -71,7 +70,7 @@ function SidebarContent() {
           />
         )}
         <div className="flex items-center gap-2.5 px-2 py-1.5 mt-1">
-          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-accent/15 text-accent flex-shrink-0">
+          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-overlay text-heading flex-shrink-0">
             <User size={12} />
           </span>
           <motion.div

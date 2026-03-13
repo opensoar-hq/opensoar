@@ -57,14 +57,14 @@ const ACTION_LABELS: Record<string, string> = {
 }
 
 const ACTION_COLORS: Record<string, string> = {
-  status_change: 'var(--color-accent)',
+  status_change: 'var(--color-info)',
   severity_change: 'var(--color-warning)',
   determination_set: 'var(--color-success)',
-  assigned: 'var(--color-accent)',
+  assigned: 'var(--color-info)',
   claimed: 'var(--color-success)',
-  manual_action: 'var(--color-accent)',
+  manual_action: 'var(--color-info)',
   comment: 'var(--color-text)',
-  playbook_triggered: 'var(--color-accent)',
+  playbook_triggered: 'var(--color-info)',
   resolved: 'var(--color-muted)',
 }
 
@@ -112,7 +112,7 @@ function IOCValue({
           {relevantActions.map((action) => (
             <DropdownItem key={action.name} onClick={() => executeMutation.mutate(action.name)} disabled={executeMutation.isPending}>
               {executeMutation.isPending && executeMutation.variables === action.name ? (
-                <Loader size={12} className="animate-spin text-accent" />
+                <Loader size={12} className="animate-spin text-info" />
               ) : (
                 <Play size={12} className="text-muted" />
               )}
@@ -189,7 +189,7 @@ function QuickRunButton({ playbook, alertId }: { playbook: Playbook; alertId: st
       )}
     >
       {mutation.isPending
-        ? <Loader size={13} className="text-accent animate-spin shrink-0" />
+        ? <Loader size={13} className="text-info animate-spin shrink-0" />
         : <Play size={13} className="text-muted group-hover:text-accent shrink-0 transition-colors" />}
       <div className="flex-1 min-w-0">
         <div className="text-xs text-heading font-medium truncate">{playbook.name}</div>

@@ -52,7 +52,7 @@ export function LoginPage() {
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-heading tracking-tight">OpenSOAR</h1>
+          <h1 className="text-2xl text-heading" style={{ fontFamily: "'Inter Tight', sans-serif", letterSpacing: '-0.03em' }}><span style={{ fontWeight: 400 }}>Open</span><span style={{ fontWeight: 700 }}>SOAR</span></h1>
           <p className="text-sm text-muted mt-1">Security Orchestration, Automation & Response</p>
         </motion.div>
 
@@ -74,7 +74,7 @@ export function LoginPage() {
                   onClick={() => setMode('login')}
                   className={`flex-1 py-2.5 text-xs font-medium border-none cursor-pointer transition-all duration-200 ${
                     mode === 'login'
-                      ? 'bg-accent text-white shadow-sm'
+                      ? 'bg-heading text-bg shadow-sm'
                       : 'bg-transparent text-muted hover:text-heading'
                   }`}
                 >
@@ -85,7 +85,7 @@ export function LoginPage() {
                   onClick={() => setMode('register')}
                   className={`flex-1 py-2.5 text-xs font-medium border-none cursor-pointer transition-all duration-200 ${
                     mode === 'register'
-                      ? 'bg-accent text-white shadow-sm'
+                      ? 'bg-heading text-bg shadow-sm'
                       : 'bg-transparent text-muted hover:text-heading'
                   }`}
                 >

@@ -55,7 +55,7 @@ function StatusIcon({ status, size = 'md' }: { status: string; size?: 'sm' | 'md
         return <CheckCircle2 className={cn(iconClass, 'text-success')} />
       case 'running':
       case 'in-progress':
-        return <CircleDotDashed className={cn(iconClass, 'text-accent')} />
+        return <CircleDotDashed className={cn(iconClass, 'text-info')} />
       case 'failed':
         return <CircleX className={cn(iconClass, 'text-danger')} />
       case 'warning':
@@ -86,8 +86,8 @@ function StatusPill({ status }: { status: string }) {
   const colorMap: Record<string, string> = {
     completed: 'bg-success/15 text-success',
     success: 'bg-success/15 text-success',
-    running: 'bg-accent/15 text-accent',
-    'in-progress': 'bg-accent/15 text-accent',
+    running: 'bg-info/15 text-info',
+    'in-progress': 'bg-info/15 text-info',
     failed: 'bg-danger/15 text-danger',
     pending: 'bg-border/40 text-muted',
   }

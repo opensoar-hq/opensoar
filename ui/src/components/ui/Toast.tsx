@@ -28,14 +28,14 @@ const ICONS: Record<ToastType, ReactNode> = {
   success: <CheckCircle size={16} className="text-success shrink-0" />,
   error: <XCircle size={16} className="text-danger shrink-0" />,
   warning: <AlertTriangle size={16} className="text-warning shrink-0" />,
-  info: <Info size={16} className="text-accent shrink-0" />,
+  info: <Info size={16} className="text-info shrink-0" />,
 }
 
 const BORDER_COLORS: Record<ToastType, string> = {
   success: 'border-l-success',
   error: 'border-l-danger',
   warning: 'border-l-warning',
-  info: 'border-l-accent',
+  info: 'border-l-info',
 }
 
 export function ToastProvider({ children }: { children: ReactNode }) {

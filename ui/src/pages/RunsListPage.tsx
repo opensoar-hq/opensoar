@@ -18,7 +18,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   completed: <CheckCircle size={14} className="text-success" />,
   success: <CheckCircle size={14} className="text-success" />,
   failed: <XCircle size={14} className="text-danger" />,
-  running: <Loader size={14} className="text-accent" />,
+  running: <Loader size={14} className="text-info" />,
   pending: <Clock size={14} className="text-muted" />,
 }
 

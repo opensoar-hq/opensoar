@@ -27,7 +27,7 @@ const SEVERITY_COLORS: Record<string, string> = {
   critical: 'var(--color-critical)',
   high: 'var(--color-danger)',
   medium: 'var(--color-warning)',
-  low: 'var(--color-accent)',
+  low: 'var(--color-info)',
 }
 
 export function SeverityBadge({ severity }: { severity: string }) {
@@ -35,7 +35,7 @@ export function SeverityBadge({ severity }: { severity: string }) {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  new: 'var(--color-accent)',
+  new: 'var(--color-info)',
   in_progress: 'var(--color-warning)',
   resolved: 'var(--color-success)',
   // Legacy — keep for runs
@@ -43,7 +43,7 @@ const STATUS_COLORS: Record<string, string> = {
   success: 'var(--color-success)',
   completed: 'var(--color-success)',
   failed: 'var(--color-danger)',
-  running: 'var(--color-accent)',
+  running: 'var(--color-info)',
   pending: 'var(--color-muted)',
 }
 
