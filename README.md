@@ -1,6 +1,9 @@
-# OpenSOAR
+<p align="center">
+  <img src="https://raw.githubusercontent.com/opensoar-hq/opensoar-www/main/public/logo.svg" width="64" height="62" alt="OpenSOAR">
+</p>
 
-**Open-source, Python-native Security Orchestration, Automation, and Response (SOAR) platform.**
+<h1 align="center">OpenSOAR</h1>
+<p align="center"><strong>Open-source, Python-native Security Orchestration, Automation, and Response (SOAR) platform.</strong></p>
 
 OpenSOAR is the orchestration and automation layer for the modern SOC. It sits between your SIEM (Elastic, Wazuh, Splunk) and your response tools, letting you write automation logic in plain Python — no sandboxes, no per-action billing, no vendor lock-in.
 

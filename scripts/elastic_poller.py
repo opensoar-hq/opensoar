@@ -27,7 +27,7 @@ from urllib.error import URLError
 
 ELASTIC_URL = os.getenv("ELASTIC_URL", "http://localhost:9200")
 ELASTIC_USER = os.getenv("ELASTIC_USER", "elastic")
-ELASTIC_PASS = os.getenv("ELASTIC_PASS", "elastic_dev")
+ELASTIC_PASS = os.getenv("ELASTIC_PASS", "")
 ELASTIC_INDEX = os.getenv("ELASTIC_INDEX", "security-events-*")
 SOAR_URL = os.getenv("SOAR_URL", "http://localhost:8000/api/v1/webhooks/alerts/elastic")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "10"))

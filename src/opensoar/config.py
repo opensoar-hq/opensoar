@@ -2,11 +2,11 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+asyncpg://opensoar:opensoar_dev@localhost:5432/opensoar"
+    database_url: str = "postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar"
     redis_url: str = "redis://localhost:6379/0"
     playbook_dirs: str = "playbooks"
-    api_key_secret: str = "CHANGE_ME"
-    jwt_secret: str = "CHANGE_ME"
+    api_key_secret: str = ""
+    jwt_secret: str = ""
     jwt_expire_minutes: int = 480
     vt_api_key: str | None = None
     abuseipdb_api_key: str | None = None
