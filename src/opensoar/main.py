@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
+from opensoar.middleware.rate_limit import RateLimitMiddleware
 from opensoar.api.actions import router as actions_router
 from opensoar.api.activities import router as activities_router
 from opensoar.api.alerts import router as alerts_router
@@ -26,7 +27,8 @@ from opensoar.db import async_session
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format="%(asctime)s %(levelname)-8s %(name)s [%(module)s:%(funcName)s] %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
 )
 logger = logging.getLogger(__name__)
 
@@ -69,6 +71,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# ── Middleware ──────────────────────────────────────────────
+app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 
 # ── API routers (must be registered before static file catch-all) ────
 app.include_router(health_router, prefix="/api/v1")
