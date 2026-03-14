@@ -177,8 +177,8 @@ opensoar/
 | Phase | Status | Focus |
 |-------|--------|-------|
 | Core Platform | ✅ Done | Alert management, playbook engine, API, UI |
-| Quality + Hardening | 🔜 In Progress | Test suite, CI, webhook auth, security hardening |
-| SDK + Integrations | ✅ Scaffolded | Python SDK on PyPI, 5 community packs in development |
+| Quality + Hardening | ✅ Done | 119 tests, CI pipeline, webhook auth, rate limiting, health checks |
+| SDK + Integrations | 🔜 In Progress | SDK on PyPI, 5 integration packs to implement |
 | Case Management | Planned | Incidents, correlation, collaboration |
 | AI Features | Planned | Auto-triage, NL playbooks, alert correlation |
 | Enterprise | Planned | RBAC, SSO, audit, multi-tenancy |
