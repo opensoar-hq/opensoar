@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Settings, Plug, Key, Users, Plus, Trash2, Shield,
-  CheckCircle, XCircle, Copy,
+  CheckCircle, XCircle, Copy, Heart, Loader2,
 } from 'lucide-react'
 import { api, type Integration } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -32,6 +32,21 @@ function IntegrationsTab() {
   const { data: integrations, isLoading } = useQuery({
     queryKey: ['integrations'],
     queryFn: api.integrations.list,
+  })
+
+  const { data: availableTypes } = useQuery({
+    queryKey: ['integration-types'],
+    queryFn: api.integrations.types,
+  })
+
+  const healthMutation = useMutation({
+    mutationFn: (id: string) => api.integrations.healthCheck(id),
+    onSuccess: (_data, _id) => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+    },
+    onError: () => {
+      toast.error('Health check failed')
+    },
   })
 
   const createMutation = useMutation({
@@ -109,11 +124,10 @@ function IntegrationsTab() {
                   onChange={(v) => setForm({ ...form, integration_type: v })}
                   options={[
                     { value: '', label: 'Select type...' },
-                    { value: 'virustotal', label: 'VirusTotal' },
-                    { value: 'abuseipdb', label: 'AbuseIPDB' },
-                    { value: 'slack', label: 'Slack' },
-                    { value: 'email', label: 'Email' },
-                    { value: 'elastic', label: 'Elasticsearch' },
+                    ...(availableTypes || []).map((t) => ({
+                      value: t.type,
+                      label: t.display_name,
+                    })),
                   ]}
                   className="w-full"
                 />
@@ -156,9 +170,22 @@ function IntegrationsTab() {
                 <div className="text-sm text-heading font-medium">{int.name}</div>
                 <div className="text-[11px] text-muted">{int.integration_type}</div>
               </div>
+              {int.health_status && (
+                <span className={`text-[11px] px-2 py-0.5 rounded ${int.health_status === 'healthy' ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+                  {int.health_status}
+                </span>
+              )}
               <span className={`text-[11px] px-2 py-0.5 rounded ${int.enabled ? 'bg-success/15 text-success' : 'bg-muted/15 text-muted'}`}>
                 {int.enabled ? 'Enabled' : 'Disabled'}
               </span>
+              <button
+                onClick={() => healthMutation.mutate(int.id)}
+                disabled={healthMutation.isPending}
+                className="p-1.5 rounded hover:bg-surface text-muted hover:text-heading bg-transparent border-none cursor-pointer disabled:opacity-50"
+                title="Run health check"
+              >
+                {healthMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Heart size={13} />}
+              </button>
               <Button size="sm" variant="ghost" onClick={() => toggleMutation.mutate(int)}>
                 {int.enabled ? 'Disable' : 'Enable'}
               </Button>

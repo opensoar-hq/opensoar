@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar"
     redis_url: str = "redis://localhost:6379/0"
     playbook_dirs: str = "playbooks"
+    integration_dirs: str = ""
     api_key_secret: str = ""
     jwt_secret: str = ""
     jwt_expire_minutes: int = 480
@@ -15,6 +16,10 @@ class Settings(BaseSettings):
     @property
     def playbook_directories(self) -> list[str]:
         return [d.strip() for d in self.playbook_dirs.split(",") if d.strip()]
+
+    @property
+    def integration_directories(self) -> list[str]:
+        return [d.strip() for d in self.integration_dirs.split(",") if d.strip()]
 
     @property
     def sync_database_url(self) -> str:

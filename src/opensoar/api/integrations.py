@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
+from opensoar.integrations.loader import IntegrationLoader
 from opensoar.models.integration import IntegrationInstance
 from opensoar.schemas.integration import (
     IntegrationCreate,
@@ -20,38 +21,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
-# Registry of known integration connector classes
-_INTEGRATION_CONNECTORS: dict[str, type] = {}
+# Singleton loader — discovered once, reused
+_loader = IntegrationLoader()
 
 
-def _discover_connectors() -> None:
-    """Lazy-load built-in integration connector classes."""
-    if _INTEGRATION_CONNECTORS:
-        return
-    try:
-        from opensoar.integrations.elastic.connector import ElasticIntegration
+def _get_loader() -> IntegrationLoader:
+    if not _loader.available_types():
+        _loader.discover_builtin()
+    return _loader
 
-        _INTEGRATION_CONNECTORS["elastic"] = ElasticIntegration
-    except ImportError:
-        pass
-    try:
-        from opensoar.integrations.virustotal.connector import VirusTotalIntegration
 
-        _INTEGRATION_CONNECTORS["virustotal"] = VirusTotalIntegration
-    except ImportError:
-        pass
-    try:
-        from opensoar.integrations.abuseipdb.connector import AbuseIPDBIntegration
-
-        _INTEGRATION_CONNECTORS["abuseipdb"] = AbuseIPDBIntegration
-    except ImportError:
-        pass
-    try:
-        from opensoar.integrations.slack.connector import SlackIntegration
-
-        _INTEGRATION_CONNECTORS["slack"] = SlackIntegration
-    except ImportError:
-        pass
+@router.get("/types")
+async def list_available_types():
+    """Return all available integration types with metadata."""
+    loader = _get_loader()
+    return loader.available_types_detail()
 
 
 @router.get("", response_model=list[IntegrationResponse])
@@ -146,8 +130,8 @@ async def check_integration_health(
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
 
-    _discover_connectors()
-    connector_cls = _INTEGRATION_CONNECTORS.get(integration.integration_type)
+    loader = _get_loader()
+    connector_cls = loader.get_connector(integration.integration_type)
 
     if connector_cls is None:
         health_status = "unhealthy"

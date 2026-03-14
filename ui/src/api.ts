@@ -292,11 +292,13 @@ export const api = {
   },
   integrations: {
     list: () => fetchJSON<Integration[]>('/integrations'),
+    types: () => fetchJSON<{ type: string; display_name: string; description: string }[]>('/integrations/types'),
     create: (data: { integration_type: string; name: string; config: Record<string, unknown>; enabled?: boolean }) =>
       postJSON<Integration>('/integrations', data),
     update: (id: string, data: { name?: string; config?: Record<string, unknown>; enabled?: boolean }) =>
       patchJSON<Integration>(`/integrations/${id}`, data),
     delete: (id: string) => deleteJSON(`/integrations/${id}`),
+    healthCheck: (id: string) => postJSON<{ healthy: boolean; message: string; details: Record<string, unknown> | null }>(`/integrations/${id}/health`, {}),
   },
   apiKeys: {
     list: () => fetchJSON<ApiKeyInfo[]>('/api-keys'),
