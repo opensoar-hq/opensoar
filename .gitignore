@@ -38,3 +38,4 @@ docker-compose.override.yml
 htmlcov/
 .pytest_cache/
 ui/.vite/
+.vite/

@@ -96,6 +96,28 @@ async def registered_analyst(client: AsyncClient) -> dict:
 
 
 @pytest.fixture
+async def registered_admin(client: AsyncClient) -> dict:
+    """Register a new admin analyst via the API."""
+    username = f"admin_{uuid.uuid4().hex[:8]}"
+    resp = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": username,
+            "display_name": "Test Admin",
+            "email": "admin@opensoar.app",
+            "password": "adminpass123",
+            "role": "admin",
+        },
+    )
+    data = resp.json()
+    return {
+        "token": data["access_token"],
+        "analyst": data["analyst"],
+        "headers": {"Authorization": f"Bearer {data['access_token']}"},
+    }
+
+
+@pytest.fixture
 async def sample_alert_via_api(client: AsyncClient) -> dict:
     """Create a sample alert via the webhook API."""
     resp = await client.post(
