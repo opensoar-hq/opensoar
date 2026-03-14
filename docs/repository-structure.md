@@ -25,7 +25,7 @@ opensoar-core/
 ├── migrations/            # Alembic migrations
 ├── playbooks/examples/    # Example playbooks
 ├── .github/workflows/     # CI: test + build Docker images
-├── Dockerfile             # Multi-target: api, worker, migrate
+├── Dockerfile             # Multi-target: api, worker, migrate, ui
 └── .dockerignore
 ```
 
@@ -33,6 +33,7 @@ opensoar-core/
 - `ghcr.io/opensoar-hq/opensoar-core-api:latest`
 - `ghcr.io/opensoar-hq/opensoar-core-worker:latest`
 - `ghcr.io/opensoar-hq/opensoar-core-migrate:latest`
+- `ghcr.io/opensoar-hq/opensoar-core-ui:latest`
 
 **Why monorepo**: API and UI are tightly coupled — same Docker Compose, same PR for cross-cutting changes, simpler CI. No version coordination overhead.
 
@@ -139,7 +140,7 @@ SaaS infrastructure, billing, onboarding.
 
 | Repo | Status | Artifact |
 |------|--------|----------|
-| opensoar-core | Active | `ghcr.io/opensoar-hq/opensoar-core-{api,worker,migrate}` |
+| opensoar-core | Active | `ghcr.io/opensoar-hq/opensoar-core-{api,worker,migrate,ui}` |
 | opensoar-sdk | Active | `pypi.org/project/opensoar-sdk` |
 | opensoar-integrations | Active (in development) | Community packs |
 | opensoar-deploy | Active | Config only |

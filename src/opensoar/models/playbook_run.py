@@ -1,11 +1,17 @@
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from opensoar.db import Base
+
+if TYPE_CHECKING:
+    from opensoar.models.action_result import ActionResult
 
 
 class PlaybookRun(Base):

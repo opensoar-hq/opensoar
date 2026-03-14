@@ -33,7 +33,7 @@ async def validate_api_key(
 
     key_hash = hash_api_key(api_key)
     result = await session.execute(
-        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active == True)
+        select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.is_active.is_(True))
     )
     db_key = result.scalar_one_or_none()
 

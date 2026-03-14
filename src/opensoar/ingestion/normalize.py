@@ -81,7 +81,6 @@ def normalize_alert(payload: dict, source: str = "webhook") -> dict:
     if raw_severity is None:
         event_category = extract_field(payload, "event.category", default="")
         event_outcome = extract_field(payload, "event.outcome", default="")
-        event_action = extract_field(payload, "event.action", default="")
         process_name = extract_field(payload, "process.name", default="")
 
         if process_name in ("nc", "ncat", "bash", "sh", "powershell", "cmd"):
@@ -95,8 +94,12 @@ def normalize_alert(payload: dict, source: str = "webhook") -> dict:
 
     severity = normalize_severity(raw_severity)
 
+    raw_source = extract_field(payload, "source", default=source)
+    # Elastic payloads have "source" as a dict (e.g. {"ip": "..."}), not a string
+    alert_source = raw_source if isinstance(raw_source, str) else source
+
     return {
-        "source": extract_field(payload, "source", default=source),
+        "source": alert_source,
         "source_id": extract_field(payload, "source_id", "id", "_id", "alert_id", "signal.id"),
         "title": str(title),
         "description": extract_field(

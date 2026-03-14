@@ -29,6 +29,12 @@ class ElasticIntegration(IntegrationBase):
             headers["Authorization"] = f"ApiKey {self._config['api_key']}"
         else:
             auth = aiohttp.BasicAuth(self._config["username"], self._config["password"])
+            self._client = aiohttp.ClientSession(
+                base_url=self._config["url"],
+                headers=headers,
+                auth=auth,
+            )
+            return
 
         self._client = aiohttp.ClientSession(
             base_url=self._config["url"],
