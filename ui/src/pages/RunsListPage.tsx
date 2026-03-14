@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Play, CheckCircle, XCircle, Clock, Loader, ChevronDown, ExternalLink } from 'lucide-react'
 import { api, type PlaybookRun } from '@/api'
@@ -10,7 +10,6 @@ import { Select } from '@/components/ui/Select'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Pagination } from '@/components/ui/Pagination'
-import { Button } from '@/components/ui/Button'
 import { PageTransition } from '@/components/ui/PageTransition'
 import { timeAgo, formatDuration, cn } from '@/lib/utils'
 
@@ -91,7 +90,6 @@ function ExpandedRunDetails({ run }: { run: PlaybookRun }) {
 }
 
 export function RunsListPage() {
-  const navigate = useNavigate()
   const [filters, setFilters] = useState<{ status?: string; playbook_id?: string }>({})
   const [page, setPage] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
