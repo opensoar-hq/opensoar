@@ -5,7 +5,8 @@
 *.pyc
 __pycache__
 .pytest_cache
-ui/
+ui/node_modules
+ui/.vite
 docs/
 tests/
 docs/*.md
