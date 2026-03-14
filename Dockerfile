@@ -27,3 +27,17 @@ CMD ["celery", "-A", "opensoar.worker.celery_app", "worker", "--loglevel=info", 
 # ── Target: Database migration ──────────────────────────────
 FROM base AS migrate
 CMD ["alembic", "upgrade", "head"]
+
+# ── Target: UI (React dashboard) ─────────────────────────────
+FROM node:20-alpine AS ui-build
+WORKDIR /app
+COPY ui/package*.json ./
+RUN npm ci --legacy-peer-deps
+COPY ui/ .
+RUN npm run build
+
+FROM nginx:alpine AS ui
+COPY --from=ui-build /app/dist /usr/share/nginx/html
+COPY ui/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -19,7 +19,7 @@ jobs:
 
     strategy:
       matrix:
-        target: [api, worker, migrate]
+        target: [api, worker, migrate, ui]
 
     steps:
       - uses: actions/checkout@v4

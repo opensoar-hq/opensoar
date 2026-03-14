@@ -7,20 +7,21 @@
 
 ## Repositories
 
-### opensoar (this repo)
-The core platform — everything needed to run a fully functional SOAR.
+### opensoar-core (this repo) — Monorepo
+The core platform — everything needed to run a fully functional SOAR, including the UI.
 
 ```
-opensoar/
+opensoar-core/
 ├── src/opensoar/          # Python backend
 │   ├── api/               # FastAPI endpoints
 │   ├── auth/              # JWT + API key auth
 │   ├── core/              # Playbook engine, triggers, executor
 │   ├── ingestion/         # Alert normalization, webhooks
-│   ├── integrations/      # Built-in integrations
+│   ├── integrations/      # Built-in integrations (Elastic, VirusTotal, AbuseIPDB, Slack, Email)
 │   ├── models/            # SQLAlchemy models
 │   ├── schemas/           # Pydantic schemas
 │   └── worker/            # Celery tasks
+├── ui/                    # React + Vite + Tailwind frontend (SOC dashboard)
 ├── migrations/            # Alembic migrations
 ├── playbooks/examples/    # Example playbooks
 ├── .github/workflows/     # CI: test + build Docker images
@@ -29,15 +30,17 @@ opensoar/
 ```
 
 **Docker images** (built by CI, pushed to GHCR):
-- `ghcr.io/opensoar-hq/opensoar-core:api-latest`
-- `ghcr.io/opensoar-hq/opensoar-core:worker-latest`
-- `ghcr.io/opensoar-hq/opensoar-core:migrate-latest`
+- `ghcr.io/opensoar-hq/opensoar-core-api:latest`
+- `ghcr.io/opensoar-hq/opensoar-core-worker:latest`
+- `ghcr.io/opensoar-hq/opensoar-core-migrate:latest`
+
+**Why monorepo**: API and UI are tightly coupled — same Docker Compose, same PR for cross-cutting changes, simpler CI. No version coordination overhead.
 
 **License**: Apache 2.0
 
 ---
 
-### opensoar-sdk (future)
+### opensoar-sdk
 Python SDK for building integrations and playbooks. This is what integration authors install.
 
 ```
@@ -62,133 +65,31 @@ opensoar-sdk/
 
 ---
 
-### opensoar-integrations (future)
+### opensoar-integrations
 Community-contributed integration packs. Each integration is a self-contained directory.
 
 ```
 opensoar-integrations/
 ├── integrations/
-│   ├── crowdstrike/
-│   │   ├── manifest.yaml      # Name, version, author, actions, config schema
-│   │   ├── connector.py       # CrowdStrike(Integration) class
-│   │   ├── actions.py         # @action functions
-│   │   ├── normalize.py       # Alert normalization (if it's a source)
-│   │   ├── tests/
-│   │   └── README.md
-│   ├── sentinelone/
-│   ├── microsoft-defender/
-│   ├── splunk/
-│   ├── jira/
-│   ├── pagerduty/
-│   ├── shodan/
-│   ├── greynoise/
+│   ├── crowdstrike/       # CrowdStrike Falcon (EDR)
+│   ├── sentinelone/       # SentinelOne (EDR)
+│   ├── jira/              # Jira (ITSM)
+│   ├── pagerduty/         # PagerDuty (Alerting)
+│   ├── misp/              # MISP (Threat Intel)
 │   └── ...
 ├── templates/
 │   └── integration-template/  # Cookiecutter template for new integrations
 └── CONTRIBUTING.md
 ```
 
-**Integration manifest format:**
-```yaml
-name: crowdstrike
-display_name: CrowdStrike Falcon
-version: 1.0.0
-author: OpenSOAR Community
-description: CrowdStrike Falcon integration for host isolation, detection lookup, and IOC management
-category: edr
-min_sdk_version: "0.1.0"
-
-config:
-  base_url:
-    type: string
-    required: true
-    description: CrowdStrike API base URL
-  client_id:
-    type: string
-    required: true
-    secret: true
-  client_secret:
-    type: string
-    required: true
-    secret: true
-
-actions:
-  - name: isolate_host
-    description: Isolate a host by hostname or device ID
-    inputs: [hostname, device_id]
-  - name: lookup_detection
-    description: Look up a detection by ID
-    inputs: [detection_id]
-  - name: search_iocs
-    description: Search IOCs in CrowdStrike Falcon
-    inputs: [type, value]
-
-triggers:
-  - name: crowdstrike.detection
-    description: New CrowdStrike detection
-    type: webhook
-```
+**Note**: Built-in integrations (Elastic, VirusTotal, AbuseIPDB, Slack, Email) ship with `opensoar-core`. This repo is for community/third-party packs that are developed and maintained independently.
 
 **License**: Apache 2.0
 
 ---
 
-### opensoar-ee (future, private)
-Enterprise features. Loaded as plugins into the core platform.
-
-```
-opensoar-ee/
-├── src/opensoar_ee/
-│   ├── rbac/              # Fine-grained permissions
-│   ├── tenancy/           # Multi-tenant isolation
-│   ├── sso/               # SAML, OIDC providers
-│   ├── audit/             # Immutable audit logging
-│   ├── reporting/         # Scheduled reports, PDF generation
-│   └── sla/               # SLA engine, breach detection
-└── pyproject.toml
-```
-
-**License**: Business Source License (BSL 1.1) — converts to Apache 2.0 after 3 years
-
----
-
-### opensoar-ai (future, private)
-AI features for the Cloud/Enterprise tier.
-
-```
-opensoar-ai/
-├── src/opensoar_ai/
-│   ├── triage/            # Auto-classification (malicious/benign/suspicious)
-│   ├── correlation/       # Semantic alert grouping
-│   ├── summarization/     # Natural language alert/incident summaries
-│   ├── playbook_gen/      # NL → Python playbook generation
-│   ├── hunting/           # Threat hunting assistant
-│   └── models/            # Model configs, prompts, evaluation
-└── pyproject.toml
-```
-
-**License**: Proprietary
-
----
-
-### opensoar-cloud (future, private)
-SaaS infrastructure, billing, onboarding.
-
-```
-opensoar-cloud/
-├── infra/                 # Terraform/Pulumi IaC
-├── billing/               # Stripe integration, usage metering
-├── onboarding/            # Tenant provisioning, setup wizard
-├── proxy/                 # Multi-tenant routing
-└── monitoring/            # SaaS health, per-tenant metrics
-```
-
-**License**: Proprietary
-
----
-
-### opensoar-deploy (created)
-Deployment configurations — Docker Compose, Helm charts, environment templates.
+### opensoar-deploy
+Deployment configurations — Docker Compose, environment templates.
 
 ```
 opensoar-deploy/
@@ -202,15 +103,48 @@ opensoar-deploy/
 
 ---
 
+### opensoar-www
+Landing page at [opensoar.app](https://opensoar.app). Astro static site deployed via Cloudflare Pages.
+
+**License**: Apache 2.0
+
+---
+
+### opensoar-ee (future, private)
+Enterprise features. Loaded as plugins into the core platform.
+
+- RBAC, SSO/SAML, multi-tenancy, audit logging, SLA engine, reporting
+
+**License**: Business Source License (BSL 1.1) — converts to Apache 2.0 after 3 years
+
+---
+
+### opensoar-ai (future, private)
+AI features for the Cloud/Enterprise tier.
+
+- Auto-classification, semantic correlation, NL summaries, playbook generation, threat hunting
+
+**License**: Proprietary
+
+---
+
+### opensoar-cloud (future, private)
+SaaS infrastructure, billing, onboarding.
+
+**License**: Proprietary
+
+---
+
 ## Repository Status
 
-| Repo | Status | CI | Artifact |
-|------|--------|-----|----------|
-| opensoar-core | ✅ Created | Build + test → GHCR (api/worker/migrate images) | `ghcr.io/opensoar-hq/opensoar-core` |
-| opensoar-ui | ✅ Created | Build + test → GHCR (nginx image) | `ghcr.io/opensoar-hq/opensoar-ui` |
-| opensoar-sdk | ✅ Created | Test (3.11/3.12/3.13) → PyPI on tag | `pypi.org/project/opensoar-sdk` |
-| opensoar-integrations | ✅ Created | Test → PyPI on tag | `pypi.org/project/opensoar-integrations` |
-| opensoar-deploy | ✅ Created | — | Config only |
-| opensoar-ee | Future | — | Plugin package |
-| opensoar-ai | Future | — | Plugin package |
-| opensoar-cloud | Future | — | Private infra |
+| Repo | Status | Artifact |
+|------|--------|----------|
+| opensoar-core | Active | `ghcr.io/opensoar-hq/opensoar-core-{api,worker,migrate}` |
+| opensoar-sdk | Active | `pypi.org/project/opensoar-sdk` |
+| opensoar-integrations | Active (in development) | Community packs |
+| opensoar-deploy | Active | Config only |
+| opensoar-www | Active | Cloudflare Pages |
+| opensoar-ui | Archived | Merged into opensoar-core monorepo |
+| opensoar-ee | Future | Plugin package |
+| opensoar-ai | Future | Plugin package |
+| opensoar-cloud | Future | Private infra |
