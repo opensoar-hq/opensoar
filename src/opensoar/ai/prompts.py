@@ -76,3 +76,72 @@ Provide:
 1. A 1-2 sentence verdict (malicious, suspicious, or benign)
 2. Key findings from each source
 3. Recommended actions"""
+
+
+def build_playbook_prompt(description: str) -> str:
+    """Build a prompt that generates a Python playbook from natural language."""
+    return f"""Generate an OpenSOAR playbook in Python based on the following description.
+
+Use the OpenSOAR decorator pattern:
+- @playbook(trigger="...", conditions={{...}}) for the main function
+- @action(name="...", timeout=30, retries=2) for individual actions
+- Use asyncio.gather() for parallel execution
+- Use async/await throughout
+
+Description:
+{description}
+
+Respond with ONLY the Python code (no markdown fences, no explanation).
+Include imports at the top. The playbook should be production-ready."""
+
+
+def build_auto_resolve_prompt(alerts: list[dict[str, Any]]) -> str:
+    """Build a prompt that decides whether alerts can be auto-resolved as benign."""
+    alerts_json = json.dumps(alerts, indent=2, default=str)
+
+    return f"""Analyze these security alerts and determine if each can be safely auto-resolved as benign.
+
+For each alert, respond with a JSON array where each element has:
+- "alert_index": the index in the input array (0-based)
+- "should_resolve": boolean — true ONLY if you are confident this is benign
+- "confidence": float 0.0-1.0 — your confidence in the decision
+- "determination": "benign" or "suspicious" or "malicious"
+- "reasoning": brief explanation
+
+Be CONSERVATIVE — only mark as should_resolve:true if confidence > 0.85 and clearly benign.
+When in doubt, set should_resolve:false so a human analyst reviews it.
+
+Respond with ONLY a JSON array (no markdown, no explanation).
+
+Alerts:
+{alerts_json}"""
+
+
+def build_correlation_prompt(alerts: list[dict[str, Any]]) -> str:
+    """Build a prompt that groups related alerts into potential incidents."""
+    alerts_json = json.dumps(alerts, indent=2, default=str)
+
+    return f"""Analyze these security alerts and group related ones into potential incidents.
+
+Look for:
+- Shared source/destination IPs
+- Same hostname or user
+- Related attack techniques (e.g., recon → exploitation → lateral movement)
+- Temporal proximity
+- Common IOCs
+
+Respond with ONLY a JSON object (no markdown, no explanation):
+{{
+  "groups": [
+    {{
+      "title": "Suggested incident title",
+      "alert_ids": ["id1", "id2"],
+      "reasoning": "Why these alerts are related"
+    }}
+  ]
+}}
+
+Alerts that don't correlate with anything can be omitted.
+
+Alerts:
+{alerts_json}"""
