@@ -206,6 +206,32 @@ export interface ApiKeyInfo {
   key?: string
 }
 
+export interface Incident2 {
+  id: string
+  title: string
+  description: string | null
+  severity: string
+  status: string
+  assigned_to: string | null
+  assigned_username: string | null
+  tags: string[] | null
+  alert_count: number
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Observable {
+  id: string
+  type: string
+  value: string
+  source: string | null
+  enrichment_status: string
+  enrichments: Record<string, unknown>[] | null
+  tags: string[] | null
+  created_at: string
+}
+
 export interface WebhookResponse {
   alert_id: string
   title: string
@@ -309,6 +335,41 @@ export const api = {
     list: () => fetchJSON<Analyst[]>('/auth/analysts'),
     update: (id: string, data: { display_name?: string; email?: string; is_active?: boolean; role?: string }) =>
       patchJSON<Analyst>(`/auth/analysts/${id}`, data),
+  },
+  incidents: {
+    list: (params?: { status?: string; severity?: string; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.status) qs.set('status', params.status)
+      if (params?.severity) qs.set('severity', params.severity)
+      if (params?.limit) qs.set('limit', String(params.limit))
+      if (params?.offset) qs.set('offset', String(params.offset))
+      const q = qs.toString()
+      return fetchJSON<{ incidents: Incident2[]; total: number }>(`/incidents${q ? `?${q}` : ''}`)
+    },
+    get: (id: string) => fetchJSON<Incident2>(`/incidents/${id}`),
+    create: (data: { title: string; severity?: string; description?: string }) =>
+      postJSON<Incident2>('/incidents', data),
+    update: (id: string, data: Record<string, unknown>) =>
+      patchJSON<Incident2>(`/incidents/${id}`, data),
+    alerts: (id: string) => fetchJSON<Alert[]>(`/incidents/${id}/alerts`),
+    linkAlert: (id: string, alertId: string) =>
+      postJSON<{ detail: string }>(`/incidents/${id}/alerts`, { alert_id: alertId }),
+    unlinkAlert: (id: string, alertId: string) =>
+      deleteJSON(`/incidents/${id}/alerts/${alertId}`),
+    suggestions: () => fetchJSON<{ source_ip: string; count: number; alert_ids: string[] }[]>('/incidents/suggestions'),
+  },
+  observables: {
+    list: (params?: { type?: string; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.type) qs.set('type', params.type)
+      if (params?.limit) qs.set('limit', String(params.limit))
+      if (params?.offset) qs.set('offset', String(params.offset))
+      const q = qs.toString()
+      return fetchJSON<{ observables: Observable[]; total: number }>(`/observables${q ? `?${q}` : ''}`)
+    },
+    get: (id: string) => fetchJSON<Observable>(`/observables/${id}`),
+    create: (data: { type: string; value: string; source?: string }) =>
+      postJSON<Observable>('/observables', data),
   },
   dashboard: {
     stats: () => fetchJSON<DashboardStats>('/dashboard/stats'),

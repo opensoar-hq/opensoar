@@ -9,6 +9,8 @@ import { AlertDetailPage } from '@/pages/AlertDetailPage'
 import { RunsListPage } from '@/pages/RunsListPage'
 import { RunDetailPage } from '@/pages/RunDetailPage'
 import { PlaybooksListPage } from '@/pages/PlaybooksListPage'
+import { IncidentsListPage } from '@/pages/IncidentsListPage'
+import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { Spinner } from '@/components/ui/Spinner'
@@ -69,6 +71,8 @@ export default function App() {
                 <Route path="alerts/:id" element={<AlertDetailPage />} />
                 <Route path="runs" element={<RunsListPage />} />
                 <Route path="runs/:id" element={<RunDetailPage />} />
+                <Route path="incidents" element={<IncidentsListPage />} />
+                <Route path="incidents/:id" element={<IncidentDetailPage />} />
                 <Route path="playbooks" element={<PlaybooksListPage />} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Outlet } from 'react-router'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard, Shield, Play, BookOpen, Settings,
+  LayoutDashboard, Shield, Play, BookOpen, Briefcase, Settings,
   LogOut, User, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -20,6 +20,7 @@ const navItems = [
   { to: '/alerts', label: 'Alerts', icon: <Shield size={18} /> },
   { to: '/runs', label: 'Runs', icon: <Play size={18} /> },
   { to: '/playbooks', label: 'Playbooks', icon: <BookOpen size={18} /> },
+  { to: '/incidents', label: 'Incidents', icon: <Briefcase size={18} /> },
 ]
 
 function SidebarContent() {
