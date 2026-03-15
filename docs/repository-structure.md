@@ -142,6 +142,5 @@ SaaS infrastructure, billing, onboarding.
 | opensoar-integrations | Active (in development) | Community packs |
 | opensoar-deploy | Active | Config only |
 | opensoar-www | Active | Cloudflare Pages |
-| opensoar-ui | Archived | Merged into opensoar-core monorepo |
 | opensoar-ee | Active (scaffolded) | Plugin package (pip install opensoar-ee) |
 | opensoar-cloud | Future | Private infra |

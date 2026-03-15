@@ -218,12 +218,11 @@ As the project grows, components will split into separate repos under the `opens
 
 | Repository | Purpose | License | When to split |
 |------------|---------|---------|---------------|
-| **opensoar** | Core platform + UI | Apache 2.0 | Now (this repo) |
-| **opensoar-sdk** | Python SDK for integration authors | Apache 2.0 | First external contributor |
-| **opensoar-integrations** | Community integration packs | Apache 2.0 | 5+ integrations beyond built-in |
-| **opensoar-ee** | Enterprise features (RBAC, SSO, audit) | BSL 1.1 | First enterprise customer |
-| **opensoar-ai** | AI features (triage, correlation, NL playbooks) | Proprietary | AI prototype working |
-| **opensoar-cloud** | SaaS infrastructure + billing | Proprietary | SaaS beta launch |
+| **opensoar-core** | Core platform + UI + AI features | Apache 2.0 | Active |
+| **opensoar-sdk** | Python SDK for integration authors | Apache 2.0 | Active (PyPI v0.1.1) |
+| **opensoar-integrations** | Community integration packs | Apache 2.0 | Active (5 connectors) |
+| **opensoar-ee** | Enterprise: SSO, multi-tenancy, SLA, compliance | BSL 1.1 | Scaffolded |
+| **opensoar-cloud** | SaaS infrastructure + billing | Proprietary | Future |
 
 See [Repository Structure](repository-structure.md) for full details.
 
