@@ -94,14 +94,14 @@ app.include_router(actions_router, prefix="/api/v1")
 app.include_router(api_keys_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 
-# ── Plugin discovery (EE, etc.) ────────────────────────────────────
+# ── Plugin discovery ────────────────────────────────────────────────
 try:
     from opensoar_ee import plugin as ee_plugin
 
     ee_plugin(app)
-    logger.info("OpenSOAR Enterprise Edition loaded")
+    logger.info("OpenSOAR EE plugin loaded")
 except ImportError:
-    pass  # EE not installed — community edition only
+    pass
 
 # ── Static UI serving (production Docker build) ─────────────────────
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"

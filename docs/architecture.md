@@ -221,8 +221,8 @@ As the project grows, components will split into separate repos under the `opens
 | **opensoar-core** | Core platform + UI + AI features | Apache 2.0 | Active |
 | **opensoar-sdk** | Python SDK for integration authors | Apache 2.0 | Active (PyPI v0.1.1) |
 | **opensoar-integrations** | Community integration packs | Apache 2.0 | Active (5 connectors) |
-| **opensoar-ee** | Enterprise: SSO, multi-tenancy, SLA, compliance | BSL 1.1 | Scaffolded |
-| **opensoar-cloud** | SaaS infrastructure + billing | Proprietary | Future |
+| **opensoar-deploy** | Docker Compose deployment configs | Apache 2.0 | Active |
+| **opensoar-www** | Marketing site (opensoar.app) | Apache 2.0 | Active |
 
 See [Repository Structure](repository-structure.md) for full details.
 
