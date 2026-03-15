@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.rbac import Permission, require_permission
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
@@ -105,7 +106,7 @@ async def list_incidents(
 async def create_incident(
     data: IncidentCreate,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_CREATE)),
 ):
     incident = Incident(
         title=data.title,
