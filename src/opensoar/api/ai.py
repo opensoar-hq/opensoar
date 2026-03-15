@@ -35,7 +35,7 @@ def get_llm_client() -> LLMClient | None:
         return LLMClient(
             provider="anthropic",
             api_key=settings.anthropic_api_key,
-            model=settings.llm_model or "claude-sonnet-4-20250514",
+            model=settings.llm_model or "claude-sonnet-4-6",
         )
     if settings.openai_api_key:
         return LLMClient(
