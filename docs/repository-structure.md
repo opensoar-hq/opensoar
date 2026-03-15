@@ -111,21 +111,18 @@ Landing page at [opensoar.app](https://opensoar.app). Astro static site deployed
 
 ---
 
-### opensoar-ee (future, private)
-Enterprise features. Loaded as plugins into the core platform.
+### opensoar-ee (private)
+Enterprise features. Auto-loaded as a plugin when `pip install opensoar-ee` is present.
 
-- RBAC, SSO/SAML, multi-tenancy, audit logging, SLA engine, reporting
+- SSO/SAML/OIDC (Okta, Azure AD, Google Workspace)
+- Multi-tenancy with full tenant isolation
+- SLA management and compliance tracking
+- Immutable audit log with SOC2/ISO 27001 exports
+- Data retention policies
+
+**Note**: AI features (summarization, triage, playbook generation, correlation) ship in the open-source core — not behind a paywall.
 
 **License**: Business Source License (BSL 1.1) — converts to Apache 2.0 after 3 years
-
----
-
-### opensoar-ai (future, private)
-AI features for the Cloud/Enterprise tier.
-
-- Auto-classification, semantic correlation, NL summaries, playbook generation, threat hunting
-
-**License**: Proprietary
 
 ---
 
@@ -146,6 +143,5 @@ SaaS infrastructure, billing, onboarding.
 | opensoar-deploy | Active | Config only |
 | opensoar-www | Active | Cloudflare Pages |
 | opensoar-ui | Archived | Merged into opensoar-core monorepo |
-| opensoar-ee | Future | Plugin package |
-| opensoar-ai | Future | Plugin package |
+| opensoar-ee | Active (scaffolded) | Plugin package (pip install opensoar-ee) |
 | opensoar-cloud | Future | Private infra |
