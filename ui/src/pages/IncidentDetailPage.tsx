@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Briefcase, Clock, Link2, Unlink, Shield } from 'lucide-react'
+import { ArrowLeft, Clock, Link2, Unlink, Shield } from 'lucide-react'
 import { api, type Alert } from '@/api'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -14,7 +14,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { PageTransition, StaggerParent, StaggerChild } from '@/components/ui/PageTransition'
-import { cn, timeAgo, formatDate } from '@/lib/utils'
+import { timeAgo, formatDate } from '@/lib/utils'
 
 export function IncidentDetailPage() {
   const { id } = useParams()
