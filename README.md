@@ -164,11 +164,7 @@ opensoar/
 
 - [Architecture](docs/architecture.md) — System design, component breakdown, deployment models
 - [Design Decisions](docs/design-decisions.md) — UX and architectural rationale
-- [Business Model](docs/business-model.md) — Open-core strategy, pricing, go-to-market
-- [Repository Structure](docs/repository-structure.md) — Multi-repo plan (SDK, integrations, enterprise, AI)
-- [Roadmap](docs/roadmap.md) — What's built, what's next
-- [Market Research](docs/market-research.md) — Market size, demand signals, target users
-- [Competitive Landscape](docs/competitive-landscape.md) — How we compare
+- [Repository Structure](docs/repository-structure.md) — Multi-repo layout
 
 ---
 
