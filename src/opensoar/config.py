@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 480
     vt_api_key: str | None = None
     abuseipdb_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
+    ollama_url: str | None = None
+    llm_model: str | None = None
     debug: bool = False
 
     @property
