@@ -172,15 +172,12 @@ opensoar/
 
 | Phase | Status | Focus |
 |-------|--------|-------|
-| Core Platform | ✅ Done | Alert management, playbook engine, API, UI |
-| Quality + Hardening | ✅ Done | 119 tests, CI pipeline, webhook auth, rate limiting, health checks |
-| SDK + Integrations | ✅ Done | SDK on PyPI, 5 integration packs implemented (30 methods) |
-| Case Management | ✅ Done | Incidents, observables, correlation, enrichment tracking |
-| AI Features | ✅ Done (Tier 1+2) | LLM summarization, triage, playbook generation, auto-resolve, correlation |
-| Enterprise | 🔜 In Progress | RBAC (3 roles, 15 permissions), audit logging |
-| Case Management | Planned | Incidents, correlation, collaboration |
-| AI Features | Planned | Auto-triage, NL playbooks, alert correlation |
-| Enterprise | Planned | RBAC, SSO, audit, multi-tenancy |
+| Core Platform | ✅ | Alert management, playbook engine, API, React UI |
+| Quality + Ops | ✅ | 168 tests, CI pipeline, webhook auth, rate limiting |
+| SDK + Integrations | ✅ | SDK on PyPI, 5 community packs (30 API methods) |
+| Case Management | ✅ | Incidents, observables, correlation suggestions |
+| AI Features | ✅ | LLM summarization, triage, playbook gen, auto-resolve, correlation |
+| Enterprise | ✅ | RBAC (3 roles, 15 permissions), plugin architecture |
 | Cloud | Planned | SaaS at opensoar.app |
 
 ---
