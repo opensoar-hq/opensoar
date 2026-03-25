@@ -7,7 +7,17 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensoar_dev}
     ports:
       - "5433:5432"
-    volumes:
+    
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opensoar"]
@@ -35,7 +45,17 @@ services:
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
       - "9200:9200"
-    volumes:
+    
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
       - esdata:/usr/share/elasticsearch/data
     mem_limit: 1g
     healthcheck:
@@ -110,7 +130,9 @@ services:
       - setup
 
   api:
-    build: .
+    build:
+      context: .
+      target: api
     command: uvicorn opensoar.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -118,7 +140,17 @@ services:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
       PLAYBOOK_DIRS: /app/playbooks
-    volumes:
+    
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
       - ./src:/app/src
       - ./playbooks:/app/playbooks
     depends_on:
@@ -128,13 +160,25 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    build:
+      context: .
+      target: worker
     command: celery -A opensoar.worker.celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
       PLAYBOOK_DIRS: /app/playbooks
-    volumes:
+    
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+
+volumes:
       - ./src:/app/src
       - ./playbooks:/app/playbooks
     depends_on:
@@ -144,7 +188,9 @@ services:
         condition: service_healthy
 
   migrate:
-    build: .
+    build:
+      context: .
+      target: migrate
     command: alembic upgrade head
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
@@ -153,6 +199,16 @@ services:
         condition: service_healthy
     profiles:
       - setup
+
+
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
 
 volumes:
   pgdata:
