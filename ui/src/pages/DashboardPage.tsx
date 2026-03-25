@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import {
   LayoutDashboard, Shield, AlertTriangle, Clock, Play,
-  CheckCircle, XCircle, User, ArrowRight, Zap, Inbox,
+  CheckCircle, XCircle, User, ArrowRight, Zap, Inbox, Activity,
 } from 'lucide-react'
 import { api } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -13,6 +13,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { PageTransition, StaggerParent, StaggerChild } from '@/components/ui/PageTransition'
 import { useAuth } from '@/contexts/AuthContext'
 import { timeAgo } from '@/lib/utils'
+import { SeverityDonut } from '@/components/dashboard/SeverityDonut'
+import { ActivitySparkline } from '@/components/dashboard/ActivitySparkline'
 
 function StatCard({ label, value, sub, icon, color, to }: {
   label: string
@@ -45,46 +47,6 @@ function StatCard({ label, value, sub, icon, color, to }: {
   return content
 }
 
-function SeverityBar({ data }: { data: Record<string, number> }) {
-  const total = Object.values(data).reduce((a, b) => a + b, 0)
-  if (total === 0) return <div className="text-xs text-muted">No alerts</div>
-  const order = ['critical', 'high', 'medium', 'low']
-  const colors: Record<string, string> = {
-    critical: 'var(--color-critical)',
-    high: 'var(--color-danger)',
-    medium: 'var(--color-warning)',
-    low: 'var(--color-info)',
-  }
-  return (
-    <div>
-      <div className="flex rounded-md overflow-hidden h-5 mb-2">
-        {order.map((sev) => {
-          const count = data[sev] || 0
-          if (count === 0) return null
-          return (
-            <div
-              key={sev}
-              style={{ width: `${(count / total) * 100}%`, backgroundColor: colors[sev] }}
-              className="flex items-center justify-center text-[10px] font-medium text-bg transition-all"
-              title={`${sev}: ${count}`}
-            >
-              {count > 0 && count}
-            </div>
-          )
-        })}
-      </div>
-      <div className="flex gap-4 text-xs">
-        {order.map((sev) => (
-          <div key={sev} className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[sev] }} />
-            <span className="text-muted capitalize">{sev}</span>
-            <span className="text-heading font-medium">{data[sev] || 0}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function formatMTTR(seconds: number | null): string {
   if (seconds === null) return '—'
@@ -241,13 +203,29 @@ export function DashboardPage() {
             </Card>
           </StaggerChild>
 
-          {/* Severity + Status side by side */}
+          {/* Activity Sparkline */}
+          <StaggerChild>
+            <Card>
+              <CardHeader className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Activity size={14} className="text-danger" />
+                  <CardTitle>Threat Activity</CardTitle>
+                </div>
+                <span className="text-[11px] text-muted">Last 14 days</span>
+              </CardHeader>
+              <CardContent>
+                <ActivitySparkline alerts={data.recent_alerts} />
+              </CardContent>
+            </Card>
+          </StaggerChild>
+
+          {/* Severity Donut + Status side by side */}
           <StaggerChild>
             <div className="grid grid-cols-2 gap-4">
               <Card>
                 <CardContent>
                   <h3 className="text-sm font-medium text-heading mb-3">Severity Distribution</h3>
-                  <SeverityBar data={data.alerts_by_severity} />
+                  <SeverityDonut data={data.alerts_by_severity} />
                 </CardContent>
               </Card>
               <Card>
