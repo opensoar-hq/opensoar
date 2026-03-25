@@ -7,14 +7,14 @@
 - **Frontend**: React 19, TypeScript, Vite 8, Tailwind CSS v4 (in `ui/`)
 - **Dockerfile**: 4 targets — api, worker, migrate, ui
 - **AI**: Built into core (not a separate paid package). Supports Claude, OpenAI, Ollama.
-- **Plugin system**: Core does `try: from opensoar_ee import plugin` to load enterprise features if installed.
+- **Plugin system**: Core uses a plugin architecture to load optional enterprise features if installed.
 
 ## Open-Source Rules
 
-- **Never reference private repos** (opensoar-ee, opensoar-cloud) in public code, docs, or READMEs.
+- **Never reference private repos** in public code, docs, or READMEs.
 - **Never mention pricing, licensing strategy, or business model** in public repos.
 - **AI features are free and open-source** — this is the viral differentiator. Never move them behind a paywall.
-- **EE features** (SSO, multi-tenancy, SLA, compliance) live in the private `opensoar-ee` repo only.
+- **Enterprise features** (SSO, multi-tenancy, SLA, compliance) are loaded via an optional plugin package if installed.
 
 ## Development Workflow (TDD)
 
@@ -60,7 +60,7 @@ JWT_SECRET="test-secret" API_KEY_SECRET="test-key" \
 - **Single source of truth**: Don't maintain the same info in multiple .md files
 - Core README has the roadmap table — keep it high-level (one line per phase)
 - Detailed architecture in `docs/architecture.md`
-- Business strategy docs stay in the private `opensoar-business` repo only
+- Business strategy docs stay in private repos only
 - When updating state, grep for stale references across all public repos before committing
 
 ## Test Fixtures
