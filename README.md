@@ -3,52 +3,56 @@
 </p>
 
 <h1 align="center">OpenSOAR</h1>
-<p align="center"><strong>Open-source, Python-native Security Orchestration, Automation, and Response (SOAR) platform.</strong></p>
+<p align="center"><strong>Open-source SOAR platform. Write security automation in Python, not YAML.</strong></p>
 
-OpenSOAR is the orchestration and automation layer for the modern SOC. It sits between your SIEM (Elastic, Wazuh, Splunk) and your response tools, letting you write automation logic in plain Python — no sandboxes, no per-action billing, no vendor lock-in.
+<p align="center">
+  <a href="https://github.com/opensoar-hq/opensoar-core/actions/workflows/build.yml"><img src="https://github.com/opensoar-hq/opensoar-core/actions/workflows/build.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License"></a>
+  <a href="https://github.com/opensoar-hq/opensoar-core/stargazers"><img src="https://img.shields.io/github/stars/opensoar-hq/opensoar-core?style=social" alt="GitHub Stars"></a>
+  <a href="https://ghcr.io/opensoar-hq/opensoar-core"><img src="https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker" alt="Docker"></a>
+</p>
+
+---
+
+OpenSOAR is the orchestration and automation layer for the modern SOC. It sits between your SIEM (Elastic, Splunk) and your response tools, letting you write automation logic in plain Python — no sandboxes, no per-action billing, no vendor lock-in.
 
 Built for IR analysts and MSSPs. Dark-themed, fast, opinionated.
+
+**Get running in 30 seconds:**
+
+```bash
+git clone https://github.com/opensoar-hq/opensoar-core.git && cd opensoar-core && docker compose up -d
+```
+
+Then open [http://localhost:3000](http://localhost:3000).
+
+---
+
+## Why OpenSOAR?
+
+| | **OpenSOAR** | Shuffle SOAR | Tines | Palo Alto XSOAR |
+|---|---|---|---|---|
+| License | Apache 2.0 | AGPL-3.0 | Proprietary | Proprietary |
+| Automation language | Python (async) | Visual/JSON | Visual builder | YAML + Python |
+| Per-action billing | No | No | Yes | Yes |
+| Self-hosted | Yes | Yes | No | On-prem option |
+| Built-in AI | Yes (free) | No | Paid add-on | Paid add-on |
+| Playbook style | Code-first | Drag-and-drop | Drag-and-drop | Mixed |
 
 ---
 
 ## Features
 
-**Alert Management**
-- Webhook ingestion with automatic normalization (Elastic, Wazuh, generic JSON)
-- Alert lifecycle: `new` → `in_progress` → `resolved`
-- Determination tracking (malicious, suspicious, benign)
-- IOC extraction (IPs, domains, hashes, URLs)
-- Deduplication and severity inference
-- Partner/tenant field for MSSP multi-tenancy
-
-**Playbook Engine**
-- Python-native — playbooks are async Python functions, not YAML or drag-and-drop
-- `@playbook` and `@action` decorators with automatic tracking
-- Parallel execution via `asyncio.gather()`, sequential via `await`
-- Timeout, retry, and backoff per action
-- Trigger engine (severity, source, field matching)
-- Celery-based async execution with horizontal scaling
-
-**Integrations**
-- Elastic Security (alerts, polling)
-- VirusTotal (hash/IP/domain/URL lookup)
-- AbuseIPDB (IP reputation)
-- Slack (notifications)
-- Email (SMTP)
-- Extensible via Python SDK
-
-**Dashboard & UI**
-- React 19 + TypeScript + Tailwind CSS v4
-- IR analyst-focused dashboard (priority queue, MTTR, unassigned alerts)
-- Per-partner stats for MSSP billing
-- Alert detail with triage, IOCs, timeline, playbook runs
-- Activity timeline with comments and edit history
-- Dark theme optimized for SOC environments
-
-**Auth & API**
-- JWT authentication with analyst management
-- API key auth for integrations
-- Full REST API (OpenAPI auto-generated)
+- [x] **Webhook ingestion** — automatic normalization (Elastic, generic JSON), IOC extraction, deduplication
+- [x] **Python-native playbooks** — `@playbook` and `@action` decorators, `asyncio.gather()` for parallelism, retry/timeout per action
+- [x] **Trigger engine** — match alerts to playbooks by severity, source, or field conditions
+- [x] **Integrations** — Elastic Security, VirusTotal, AbuseIPDB, Slack, Email, extensible via Python SDK
+- [x] **Case management** — incidents, observables, correlation suggestions
+- [x] **AI-powered** — LLM summarization, triage recommendations, playbook generation, auto-resolve, correlation (Claude, OpenAI, Ollama)
+- [x] **Dashboard & UI** — React 19, dark theme, priority queue, MTTR, per-partner MSSP stats
+- [x] **Auth & RBAC** — JWT + API keys, 3 roles, 15 permissions
+- [x] **Celery workers** — async execution with horizontal scaling
+- [x] **Plugin architecture** — load optional enterprise features if installed
 
 ---
 
@@ -77,10 +81,38 @@ open http://localhost:3000
 
 ---
 
+## Example Playbook
+
+```python
+from opensoar import playbook, action, Alert
+import asyncio
+
+@playbook(trigger="webhook", conditions={"severity": ["high", "critical"]})
+async def triage_high_severity(alert: Alert):
+    # Enrich in parallel
+    vt_result, abuse_result = await asyncio.gather(
+        lookup_virustotal(alert.iocs),
+        lookup_abuseipdb(alert.source_ip),
+    )
+
+    if abuse_result.confidence_score > 80:
+        await isolate_host(alert.hostname)
+        await notify_slack(
+            channel="#soc-critical",
+            message=f"🚨 {alert.title} — host isolated, VT: {vt_result.positives}/{vt_result.total}"
+        )
+    else:
+        await alert.update(determination="benign", status="resolved")
+```
+
+No DSL. No YAML. Just Python.
+
+---
+
 ## Architecture
 
 ```
-Elastic / Wazuh / Webhooks
+Elastic / Webhooks
          │
          ▼
   ┌──────────────┐
@@ -107,34 +139,6 @@ Elastic / Wazuh / Webhooks
 ```
 
 **Stack**: Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL, Redis, Celery, React 19, Vite
-
----
-
-## Example Playbook
-
-```python
-from opensoar import playbook, action, Alert
-import asyncio
-
-@playbook(trigger="webhook", conditions={"severity": ["high", "critical"]})
-async def triage_high_severity(alert: Alert):
-    # Enrich in parallel
-    vt_result, abuse_result = await asyncio.gather(
-        lookup_virustotal(alert.iocs),
-        lookup_abuseipdb(alert.source_ip),
-    )
-
-    if abuse_result.confidence_score > 80:
-        await isolate_host(alert.hostname)
-        await notify_slack(
-            channel="#soc-critical",
-            message=f"🚨 {alert.title} — host isolated, VT: {vt_result.positives}/{vt_result.total}"
-        )
-    else:
-        await alert.update(determination="benign", status="resolved")
-```
-
-No DSL. No YAML. Just Python.
 
 ---
 
@@ -176,15 +180,21 @@ opensoar/
 | Quality + Ops | ✅ | 168 tests, CI pipeline, webhook auth, rate limiting |
 | SDK + Integrations | ✅ | SDK on PyPI, 5 community packs (30 API methods) |
 | Case Management | ✅ | Incidents, observables, correlation suggestions |
-| AI Features | ✅ | LLM summarization, triage, playbook gen, auto-resolve, correlation |
+| AI Features | ✅ | LLM summarization, triage, playbook gen, auto-resolve |
 | Enterprise | ✅ | RBAC (3 roles, 15 permissions), plugin architecture |
-| Cloud | Planned | SaaS at opensoar.app |
+| Cloud | 📋 | SaaS at opensoar.app |
 
 ---
 
 ## Contributing
 
-OpenSOAR is in early development. If you're interested in contributing — integrations, playbooks, frontend, documentation — open an issue or reach out.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Areas where help is most needed:
+- **Integrations** — new SIEM normalizers, response tool connectors
+- **Playbooks** — community playbook packs for common scenarios
+- **Frontend** — dashboard improvements, new visualizations
+- **Documentation** — guides, tutorials, deployment recipes
 
 ---
 
