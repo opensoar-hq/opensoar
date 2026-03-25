@@ -6,6 +6,10 @@ import uuid
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
+# Set required secrets before any opensoar imports (config validates on import)
+os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("API_KEY_SECRET", "test-api-key-secret")
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

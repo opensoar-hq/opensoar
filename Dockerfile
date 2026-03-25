@@ -15,17 +15,24 @@ COPY alembic.ini ./
 
 RUN uv pip install --system .
 
+# Create non-root user for running services
+RUN groupadd -r opensoar && useradd -r -g opensoar -d /app -s /sbin/nologin opensoar \
+    && chown -R opensoar:opensoar /app
+
 # ── Target: API server ──────────────────────────────────────
 FROM base AS api
+USER opensoar
 EXPOSE 8000
 CMD ["uvicorn", "opensoar.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Target: Celery worker ───────────────────────────────────
 FROM base AS worker
+USER opensoar
 CMD ["celery", "-A", "opensoar.worker.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
 
 # ── Target: Database migration ──────────────────────────────
 FROM base AS migrate
+USER opensoar
 CMD ["alembic", "upgrade", "head"]
 
 # ── Target: UI (React dashboard) ─────────────────────────────

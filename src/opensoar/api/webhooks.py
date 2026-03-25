@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi import APIRouter, Depends, HTTPException, Header, Request, Security
 from fastapi.security import APIKeyHeader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,15 +24,26 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def _verify_hmac_signature(body: bytes, secret: str, signature: str) -> bool:
+    """Verify HMAC-SHA256 signature of request body."""
+    if not signature.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature[7:])
+
+
 async def _validate_webhook_key(
+    request: Request,
     session: AsyncSession = Depends(get_db),
     api_key: str | None = Security(_api_key_header),
+    x_webhook_signature: str | None = Header(None),
 ) -> None:
-    """Validate the API key if one is provided.
+    """Validate the API key and optional HMAC signature.
 
     - If no key is sent and no keys exist in the DB → open mode (allow).
     - If no key is sent but keys exist → still allow (backward compat, will tighten later).
-    - If a key is sent → it must be valid and active, otherwise 401.
+    - If a key is sent → it must be valid, active, and not expired, otherwise 401.
+    - If X-Webhook-Signature is sent → verify HMAC-SHA256 of the body using the API key.
     """
     if api_key is None:
         return
@@ -42,6 +55,18 @@ async def _validate_webhook_key(
     db_key = result.scalar_one_or_none()
     if db_key is None:
         raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+
+    # Check expiry
+    if db_key.expires_at is not None and db_key.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="API key expired")
+
+    # Verify HMAC signature if provided
+    if x_webhook_signature is not None:
+        body = await request.body()
+        if not _verify_hmac_signature(body, api_key, x_webhook_signature):
+            raise HTTPException(
+                status_code=401, detail="Invalid webhook signature"
+            )
 
     # Update last_used_at
     db_key.last_used_at = datetime.now(timezone.utc)

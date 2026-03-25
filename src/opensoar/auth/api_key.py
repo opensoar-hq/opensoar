@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
@@ -39,5 +40,8 @@ async def validate_api_key(
 
     if db_key is None:
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+    if db_key.expires_at is not None and db_key.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="API key expired")
 
     return db_key

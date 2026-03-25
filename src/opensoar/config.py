@@ -1,3 +1,4 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -9,6 +10,19 @@ class Settings(BaseSettings):
     api_key_secret: str = ""
     jwt_secret: str = ""
     jwt_expire_minutes: int = 480
+
+    @model_validator(mode="after")
+    def _check_secrets(self) -> "Settings":
+        if not self.jwt_secret:
+            raise ValueError(
+                "JWT_SECRET must be set to a non-empty value. "
+                "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+        if not self.api_key_secret:
+            raise ValueError(
+                "API_KEY_SECRET must be set to a non-empty value."
+            )
+        return self
     vt_api_key: str | None = None
     abuseipdb_api_key: str | None = None
     anthropic_api_key: str | None = None
