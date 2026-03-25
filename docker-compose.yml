@@ -110,7 +110,9 @@ services:
       - setup
 
   api:
-    build: .
+    build:
+      context: .
+      target: api
     command: uvicorn opensoar.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
@@ -128,7 +130,9 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    build:
+      context: .
+      target: worker
     command: celery -A opensoar.worker.celery_app worker --loglevel=info --concurrency=4
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
@@ -144,7 +148,9 @@ services:
         condition: service_healthy
 
   migrate:
-    build: .
+    build:
+      context: .
+      target: migrate
     command: alembic upgrade head
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
@@ -153,6 +159,15 @@ services:
         condition: service_healthy
     profiles:
       - setup
+
+  ui:
+    build:
+      context: .
+      target: ui
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
 
 volumes:
   pgdata:
