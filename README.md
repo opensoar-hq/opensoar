@@ -111,31 +111,12 @@ No DSL. No YAML. Just Python.
 
 ## Architecture
 
-```
-Elastic / Webhooks
-         │
-         ▼
-  ┌──────────────┐
-  │  Ingestion   │  Normalize → Extract IOCs → Deduplicate
-  └──────┬───────┘
-         │
-         ▼
-  ┌──────────────┐
-  │  Trigger     │  Match alert to playbook conditions
-  │  Engine      │
-  └──────┬───────┘
-         │
-         ▼
-  ┌──────────────┐
-  │  Celery      │  Async playbook execution
-  │  Worker      │  @action tracking, retries, timeouts
-  └──────┬───────┘
-         │
-         ▼
-  ┌──────────────┐
-  │  Actions     │  Enrich (VT, AbuseIPDB) → Respond (isolate, block)
-  │              │  → Notify (Slack, email) → Update (tickets, cases)
-  └──────────────┘
+```mermaid
+flowchart TD
+    A["Elastic / Webhooks"] --> B["Ingestion\nNormalize → Extract IOCs → Deduplicate"]
+    B --> C["Trigger Engine\nMatch alert to playbook conditions"]
+    C --> D["Celery Worker\nAsync playbook execution\n@action tracking, retries, timeouts"]
+    D --> E["Actions\nEnrich (VT, AbuseIPDB) → Respond (isolate, block)\n→ Notify (Slack, email) → Update (tickets, cases)"]
 ```
 
 **Stack**: Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL, Redis, Celery, React 19, Vite

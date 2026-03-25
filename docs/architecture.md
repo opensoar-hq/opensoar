@@ -12,84 +12,64 @@
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          Data Sources                               │
-│  Elastic Security  │  Wazuh  │  Security Onion  │  Webhooks  │ API │
-└────────┬───────────┴────┬────┴────────┬─────────┴─────┬──────┴─────┘
-         │                │             │               │
-         ▼                ▼             ▼               ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Ingestion Layer                                │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │  Webhook      │  │  Polling      │  │  Message Queue Consumer │  │
-│  │  Receiver     │  │  Connectors   │  │  (for high-volume)      │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────────┬───────────────┘  │
-│         └─────────────────┴──────────────────────┘                  │
-│                            │                                        │
-│              Alert Normalization + IOC Extraction                    │
-│              (common schema, severity inference)                     │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Orchestration Engine                              │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐    │
-│  │                   Playbook Runtime                           │    │
-│  │                                                             │    │
-│  │  - Python-native execution (async functions)                │    │
-│  │  - @playbook and @action decorators                         │    │
-│  │  - Parallel via asyncio.gather(), sequential via await      │    │
-│  │  - Retry/backoff/timeout per action                         │    │
-│  │  - contextvars for automatic run tracking                   │    │
-│  └─────────────────────────────────────────────────────────────┘    │
-│                                                                     │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │  Trigger      │  │  Scheduler   │  │  Playbook Registry       │  │
-│  │  Engine       │  │  (APScheduler)│  │  (auto-discover .py)    │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-              ┌──────────────┼──────────────┐
-              ▼              ▼              ▼
-┌──────────────────┐ ┌─────────────┐ ┌──────────────────┐
-│  Alert Mgmt      │ │  Enrichment │ │  Response Actions │
-│                  │ │             │ │                    │
-│  - Lifecycle     │ │  - VT       │ │  - Isolate host   │
-│  - Determination │ │  - AbuseIPDB│ │  - Block IP       │
-│  - Partner/MSSP  │ │  - Shodan   │ │  - Disable user   │
-│  - Timeline      │ │  - MISP     │ │  - Create ticket  │
-│  - IOCs          │ │  - Custom   │ │  - Notify (Slack)  │
-└──────────────────┘ └─────────────┘ └──────────────────┘
-              │              │              │
-              ▼              ▼              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Integration Layer                              │
-│                                                                     │
-│  Each integration = Python module with standard interface           │
-│  Built-in: Elastic, VT, AbuseIPDB, Slack, Email                   │
-│  Community: via opensoar-integrations repo (future)                 │
-│                                                                     │
-│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐          │
-│  │Elastic │ │  VT    │ │AbuseIP │ │ Slack  │ │ Email  │  ...     │
-│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘          │
-└─────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Web UI (React 19)                           │
-│                                                                     │
-│  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
-│  │ Dashboard       │  │ Alert Detail    │  │ Alert Queue         │   │
-│  │ (IR-focused)    │  │ (triage view)   │  │ (bulk ops)          │   │
-│  └────────────────┘  └────────────────┘  └─────────────────────┘   │
-│  ┌────────────────┐  ┌────────────────┐  ┌─────────────────────┐   │
-│  │ Playbook Runs   │  │ Settings       │  │ Login / Auth         │   │
-│  │ (execution log)  │  │ (keys, config)  │  │ (JWT-based)         │   │
-│  └────────────────┘  └────────────────┘  └─────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Sources["Data Sources"]
+        S1["Elastic Security"]
+        S2["Wazuh"]
+        S3["Security Onion"]
+        S4["Webhooks"]
+        S5["API"]
+    end
+
+    subgraph Ingestion["Ingestion Layer"]
+        WR["Webhook Receiver"]
+        PC["Polling Connectors"]
+        MQ["Message Queue Consumer\n(for high-volume)"]
+        NORM["Alert Normalization + IOC Extraction\n(common schema, severity inference)"]
+        WR & PC & MQ --> NORM
+    end
+
+    subgraph Orchestration["Orchestration Engine"]
+        subgraph Runtime["Playbook Runtime"]
+            R1["Python-native execution (async functions)"]
+            R2["@playbook and @action decorators"]
+            R3["Parallel via asyncio.gather(), sequential via await"]
+            R4["Retry/backoff/timeout per action"]
+            R5["contextvars for automatic run tracking"]
+        end
+        TE["Trigger Engine"]
+        SC["Scheduler\n(APScheduler)"]
+        PR["Playbook Registry\n(auto-discover .py)"]
+    end
+
+    subgraph Outputs["Action Layer"]
+        AM["Alert Mgmt\nLifecycle, Determination\nPartner/MSSP, Timeline, IOCs"]
+        EN["Enrichment\nVT, AbuseIPDB\nShodan, MISP, Custom"]
+        RA["Response Actions\nIsolate host, Block IP\nDisable user, Create ticket\nNotify (Slack)"]
+    end
+
+    subgraph Integrations["Integration Layer"]
+        direction LR
+        INT_DESC["Each integration = Python module with standard interface"]
+        EL["Elastic"] ~~~ VT["VT"] ~~~ AB["AbuseIPDB"] ~~~ SL["Slack"] ~~~ EM["Email"]
+    end
+
+    subgraph UI["Web UI (React 19)"]
+        direction LR
+        DASH["Dashboard\n(IR-focused)"]
+        AD["Alert Detail\n(triage view)"]
+        AQ["Alert Queue\n(bulk ops)"]
+        PRU["Playbook Runs\n(execution log)"]
+        SET["Settings\n(keys, config)"]
+        AUTH["Login / Auth\n(JWT-based)"]
+    end
+
+    Sources --> Ingestion
+    NORM --> Orchestration
+    Orchestration --> Outputs
+    Outputs --> Integrations
+    Integrations --> UI
 ```
 
 ---
