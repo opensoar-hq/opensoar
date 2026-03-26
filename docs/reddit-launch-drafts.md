@@ -8,17 +8,37 @@ Prepared for posting 1-2 days after the HN launch. Each post is tailored to its 
 
 ### Title
 
-OpenSOAR: Open-source SOAR platform with Python async playbooks and built-in LLM triage (Apache 2.0)
+TheHive was archived in December 2025. We built an open-source SOAR successor in Python (Apache 2.0, async playbooks, built-in LLM triage)
 
 ### Post Body
 
-We open-sourced a SOAR platform where playbooks are Python async functions instead of YAML or drag-and-drop workflows. Apache 2.0, self-hosted, AI features included for free.
+TheHive was the de facto open-source SOAR platform for years — 3,900 stars, hundreds of SOC teams running it. Then StrangeBee archived the open-source repos in December 2025 and moved everything behind a commercial license. 821 issues frozen. No migration path.
+
+The community fragmented. Some went to Shuffle, some to DFIR-IRIS, some started evaluating Tracecat. None of them are a drop-in replacement. We built **OpenSOAR** to fill that gap — a Python-native SOAR platform that's Apache 2.0 and will stay that way.
 
 **GitHub:** https://github.com/opensoar-hq/opensoar-core
 
+#### Why another SOAR?
+
+Here's the honest landscape of what's available right now:
+
+| | **OpenSOAR** | **Shuffle** | **Tracecat** | **DFIR-IRIS** | **StackStorm** |
+|---|---|---|---|---|---|
+| **Stars** | New | ~2,200 | ~3,500 | ~2,000 | ~6,400 |
+| **License** | Apache 2.0 | AGPLv3 | AGPL (was Apache) | LGPL-3.0 | Apache 2.0 |
+| **Automation** | Python async | Visual/YAML | No-code + YAML | Python modules | YAML + Python |
+| **Case management** | Yes (incidents, observables) | No | Limited | Yes (core focus) | No |
+| **Built-in AI** | Yes (free) | No | Yes (paid tier) | No | No |
+| **Integrations** | 5 built-in | 200+ | 100+ | Modules | 200+ packs |
+| **Status** | Active | Active, 1-10 person team | Beta after 2 years, $2M raised | Active | Life support (acquisition carousel) |
+
+**We're honest about the gaps.** Shuffle and StackStorm have 200+ integrations. We have 5 (VirusTotal, AbuseIPDB, Slack, Email, Elastic). The trade-off: our integrations are Python classes you can read, test, and extend — not black-box Docker containers or YAML configs. The `IntegrationBase` adapter pattern means adding a new one is ~50 lines of Python.
+
+StackStorm has 6,400 stars but has been through Brocade → Broadcom → Extreme Networks → Linux Foundation. Development has effectively stalled. Tracecat raised $2M from YC but is still in beta after two years and switched from Apache 2.0 to AGPL — the same license bait-and-switch pattern that killed community trust in TheHive.
+
 #### The playbook engine
 
-The core idea: security automation should be code you can test, lint, and version control. Playbooks use two decorators:
+The core bet: security automation should be testable Python, not YAML or drag-and-drop.
 
 ```python
 from opensoar import playbook, action
@@ -38,7 +58,7 @@ async def enrich_virustotal(iocs: dict) -> dict:
 
 @playbook(trigger="webhook", conditions={"severity": ["high", "critical"]})
 async def triage_high_severity(alert):
-    # Parallel enrichment via asyncio.gather — implicit DAG, no workflow DSL
+    # Parallel enrichment — implicit DAG, no workflow DSL
     vt_result, abuse_result = await asyncio.gather(
         enrich_virustotal(alert.iocs),
         enrich_abuseipdb(alert.source_ip),
@@ -50,20 +70,20 @@ async def triage_high_severity(alert):
 
 Key design decisions:
 
-- **No DSL or DAG definition language.** Parallelism = `asyncio.gather()`. Sequential = `await`. Standard Python control flow for branching.
+- **No DSL.** Parallelism = `asyncio.gather()`. Sequential = `await`. Branching = `if/else`.
 - **`@action` decorator** tracks execution time, I/O, retries per action. Each action gets its own timeout and backoff config.
 - **contextvars** for automatic run tracking — every action knows which playbook run it belongs to without threading state through function args.
 - **PlaybookRegistry** auto-discovers `.py` files from configured directories, syncs to DB at startup.
 
 #### AI integration (free, not upsell)
 
-Three LLM providers supported — Anthropic (Claude), OpenAI, Ollama (local). The AI playbooks are real examples in the repo:
+Three LLM providers — Anthropic (Claude), OpenAI, Ollama (local). The AI playbooks are real examples in the repo:
 
-- **AI Phishing Triage** (`playbooks/examples/ai_phishing_triage.py`): Extracts IOCs, checks VT/AbuseIPDB in parallel, feeds enrichment + alert context to an LLM, gets structured JSON verdict (malicious/suspicious/benign with confidence score), auto-resolves benign or escalates.
-- **AI Threat Hunt** (`playbooks/examples/ai_threat_hunt.py`): Collects all IOCs, hunts across all integrations in parallel (`asyncio.gather` over IPs, domains, hashes), LLM correlates findings into an analyst-ready report with MITRE ATT&CK context.
+- **AI Phishing Triage**: Extracts IOCs, checks VT/AbuseIPDB in parallel, feeds enrichment + alert context to an LLM, gets structured JSON verdict (malicious/suspicious/benign with confidence score), auto-resolves benign or escalates.
+- **AI Threat Hunt**: Collects all IOCs, hunts across all integrations in parallel, LLM correlates findings into an analyst-ready report with MITRE ATT&CK context.
 - **Playbook generation**: Describe what you want in English, get production Python.
 
-The LLM calls use structured JSON output with fallback parsing — if the model doesn't return valid JSON, it degrades gracefully to a "manual review required" verdict instead of crashing the playbook.
+This is Apache 2.0 — not a "free tier" that gates the useful features. Tracecat's AI features require their paid cloud tier. Ours ship in the open-source repo.
 
 #### Architecture
 
@@ -74,9 +94,7 @@ Webhooks/Elastic → Ingestion (normalize, extract IOCs, dedup)
     → Actions (VT, AbuseIPDB, Slack, Email, isolate host, etc.)
 ```
 
-Stack: Python 3.12, FastAPI, async SQLAlchemy + asyncpg, PostgreSQL 16, Redis 7, Celery, React 19 + Vite.
-
-168+ tests, CI on GitHub Actions (lint + test + Docker multi-target build).
+Stack: Python 3.12, FastAPI, async SQLAlchemy + asyncpg, PostgreSQL 16, Redis 7, Celery, React 19 + Vite. 168+ tests, CI on GitHub Actions.
 
 #### Quick start
 
@@ -88,29 +106,41 @@ curl -X POST http://localhost:8000/api/v1/webhooks/alerts \
   -d '{"rule_name": "Brute Force Detected", "severity": "high", "source_ip": "203.0.113.42"}'
 ```
 
-Looking for feedback on the playbook API design and the AI integration approach. If you've built SOAR automation before, curious what abstractions you'd want. Contributors welcome — especially for new SIEM normalizers and integration connectors.
+Looking for feedback on the playbook API design and the Python-native approach vs. visual builders. If you've migrated off TheHive, what are you using now and what's missing? Contributors welcome — especially for new integration connectors and SIEM normalizers.
 
 ---
 
-## 2. r/cybersecurity — SOC Pain Points & TheHive Replacement
+## 2. r/cybersecurity — Community Fragmentation & TheHive Replacement
 
 ### Title
 
-We built an open-source SOAR to replace TheHive + Cortex — Python playbooks, built-in AI, no per-action billing
+TheHive is dead. The open-source SOAR community is fragmented. We're building the replacement.
 
 ### Post Body
 
-TheHive was archived in December 2025. If you were one of the ~4,000 users, you know the scramble. The remaining options are either expensive (Splunk SOAR, XSOAR — $100K+/year with per-action billing), YAML-based, or GUI-first workflow builders.
+TheHive was archived in December 2025. StrangeBee moved everything to a commercial-only model — TheHive 5 requires a license after a 14-day trial, then goes read-only. The open-source repos are frozen with 821 unresolved issues.
 
-We built **OpenSOAR** — an open-source SOAR platform (Apache 2.0) designed for the pain points we kept hitting:
+If you were one of the ~4,000 users, you already know the scramble. The problem isn't that there are no alternatives — it's that **no single tool replaced what TheHive did**.
+
+Here's what happened to the community:
+
+- **Shuffle** → Good for workflow automation, but no case management. ~2,200 stars (not 15K as sometimes reported). AGPLv3.
+- **DFIR-IRIS** → Closest to TheHive's case management, but focused on digital forensics. Less automation.
+- **Tracecat** → YC-backed ($2M), but still in beta after 2 years. Switched from Apache 2.0 to AGPL.
+- **StackStorm** → 6,400 stars but effectively on life support after being passed through Brocade → Broadcom → Extreme Networks → Linux Foundation.
+- **Cortex XSOAR / Splunk SOAR** → $100K+/year with per-action billing. Not an option for most teams.
+
+**No one tool covers alert triage + case management + playbook automation + observable enrichment** the way TheHive + Cortex did. The community fragmented.
+
+We built **OpenSOAR** to be that single platform again.
 
 **GitHub:** https://github.com/opensoar-hq/opensoar-core
 
-#### What it solves
+#### What it covers
 
 **1. "I just want to write Python, not fight a visual builder"**
 
-Playbooks are async Python functions with decorators. Parallel enrichment is `asyncio.gather()`. Error handling is `try/except`. You can `pip install` anything. No sandbox, no DSL, no YAML.
+Playbooks are async Python functions with decorators. Parallel enrichment is `asyncio.gather()`. Error handling is `try/except`. You can `pip install` anything.
 
 ```python
 @playbook(trigger="webhook", conditions={"severity": ["high", "critical"]})
@@ -126,7 +156,7 @@ async def triage_high_severity(alert):
 
 **2. "Cortex was a pain to maintain"**
 
-TheHive needed Cortex (a separate Java service) with analyzers packaged as Docker containers. OpenSOAR has integrations built in — VirusTotal, AbuseIPDB, Slack, Email, Elastic. No Docker socket mounts, no analyzer versioning headaches.
+TheHive needed Cortex (a separate Java service) with analyzers as Docker containers. OpenSOAR has integrations built in — no Docker socket mounts, no analyzer versioning headaches.
 
 | | TheHive 4 | OpenSOAR |
 |---|---|---|
@@ -137,23 +167,26 @@ TheHive needed Cortex (a separate Java service) with analyzers packaged as Docke
 
 **3. "AI shouldn't be a $50K add-on"**
 
-Built-in LLM integration (Claude, OpenAI, or Ollama for fully local). It does:
-- Alert summarization and triage recommendations with confidence scores
-- Auto-resolve benign alerts (with audit trail)
-- Threat hunt correlation across all your enrichment sources
-- Playbook generation from plain English
+Built-in LLM integration (Claude, OpenAI, or Ollama for fully local). Alert summarization, triage recommendations, auto-resolve benign alerts, threat hunt correlation, playbook generation from English. This is free and open-source — not an enterprise upsell.
 
-This is free, not an enterprise upsell. We ship example AI playbooks you can run today.
+**4. Where we're honest about gaps**
 
-**4. "We're an MSSP and need multi-tenant visibility"**
+We have 5 built-in integrations (VirusTotal, AbuseIPDB, Slack, Email, Elastic). TheHive's Cortex ecosystem had 100+. Shuffle has 200+. We don't have MISP integration yet, no case templates, no bulk observable analysis, no TLP/PAP as first-class fields. These are on the roadmap and contributions are welcome — the integration framework is designed for this (`IntegrationBase` adapter pattern, auto-discovery).
 
-Partner field on every alert, per-partner MSSP dashboard stats, MTTR tracking per customer.
+The trade-off: fewer integrations, but each one is a Python class you can read, test, and debug. Adding a new integration is ~50 lines of code.
 
 #### Migration from TheHive
 
 We have a [migration guide](https://github.com/opensoar-hq/opensoar-core/blob/main/docs/migrating-from-thehive.md) with concept mapping, field mapping tables, and export/import scripts. Alerts, cases (→ incidents), observables, and activity all transfer.
 
-Being honest about gaps: no case-level task checklists yet, no TLP/PAP as first-class fields (use tags), and 5 built-in integrations vs. Cortex's 100+ analyzer ecosystem. These are on the roadmap and contributions are welcome.
+| TheHive Concept | OpenSOAR Equivalent |
+|---|---|
+| Alert | Alert (with auto-normalization + IOC extraction) |
+| Case | Incident |
+| Observable | Observable |
+| Cortex Analyzer | Integration (Python class) |
+| Cortex Responder | Action (`@action` decorator) |
+| Case Template | Playbook (`@playbook` decorator) |
 
 #### Get running
 
@@ -165,29 +198,35 @@ docker compose up -d
 
 Docker Compose brings up API, worker, PostgreSQL, Redis, and the React UI. Send a test alert via webhook and watch it flow through.
 
-If you're running a SOC or doing IR, what's missing? What would make you actually switch?
+If you migrated off TheHive, what did you switch to? What's still missing? What would make you switch again?
 
 ---
 
-## 3. r/selfhosted — Docker Deployment & Privacy
+## 3. r/selfhosted — License Anger & Privacy-First Deployment
 
 ### Title
 
-OpenSOAR — self-hosted security automation platform (SOAR) with AI. Docker Compose, Apache 2.0, no cloud dependency.
+OpenSOAR — self-hosted SOAR platform after TheHive pulled the open-source rug. Apache 2.0 forever, local AI with Ollama, single docker compose up.
 
 ### Post Body
 
-Built an open-source SOAR (Security Orchestration, Automation and Response) platform that runs entirely self-hosted. If you run security tools at home or for a small team and want to automate alert triage without paying for Splunk SOAR or sending your security data to a SaaS vendor, this might be for you.
+TheHive was the go-to open-source security platform for years. Then StrangeBee archived the repos and moved to commercial-only licensing. 14-day trial, then read-only mode. The classic open-source bait-and-switch.
+
+It's the same pattern we keep seeing: build community goodwill with open source, get traction, pull the rug. Elastic did it. HashiCorp did it. Now TheHive. Tracecat started Apache 2.0, already switched to AGPL.
+
+We built **OpenSOAR** and made a deliberate choice: **Apache 2.0, forever.** No CLA that lets us relicense later. No "open core" where the useful features are behind a paywall. The AI features — the part that every other vendor charges extra for — ship free in the open-source repo.
 
 **GitHub:** https://github.com/opensoar-hq/opensoar-core
 
-#### What it does
+#### One command to run
 
-It sits between your security tools (Elastic, Wazuh, or any webhook source) and your response actions. Alerts come in, get normalized and enriched automatically, and playbooks run to triage/respond. Think of it as "if this alert, then do these things" but with real Python code instead of Zaps or Node-RED flows.
+```bash
+git clone https://github.com/opensoar-hq/opensoar-core.git && cd opensoar-core
+docker compose up -d
+# UI at http://localhost:3000, API at http://localhost:8000
+```
 
-#### Deployment
-
-Single `docker compose up -d`. Four containers:
+Four containers, reasonable footprint:
 
 | Container | Purpose |
 |---|---|
@@ -196,35 +235,25 @@ Single `docker compose up -d`. Four containers:
 | **postgres** | PostgreSQL 16 database |
 | **redis** | Message broker + cache |
 
-Plus an optional React UI container at `localhost:3000`. Total footprint is reasonable — Postgres and Redis are lightweight, the API is Python/uvicorn, the worker scales horizontally if you need it.
+Plus an optional React UI container. The docker-compose also optionally includes Elasticsearch 8 + Kibana with a pre-configured webhook connector, so you can test the full SIEM-to-SOAR pipeline locally.
 
-```bash
-git clone https://github.com/opensoar-hq/opensoar-core.git && cd opensoar-core
-docker compose up -d
-# UI at http://localhost:3000, API at http://localhost:8000
-```
+#### Nothing leaves your network
 
-The docker-compose also optionally includes Elasticsearch 8 + Kibana with a pre-configured webhook connector pointing back to OpenSOAR, so you can test the full SIEM-to-SOAR pipeline locally.
+- **All data stays local.** No telemetry, no cloud calls unless you configure external integrations.
+- **AI with Ollama** — fully local LLM, no data leaves your machine. Also supports Claude and OpenAI if you prefer cloud LLMs, but Ollama is a first-class citizen.
+- **PostgreSQL** for storage — `pg_dump` to back up, standard tools to inspect. No Cassandra/Elasticsearch/MinIO stack like TheHive required.
+- **Apache 2.0** — use commercially, fork, embed, no restrictions. No AGPL, no BSL, no SSPL.
 
-#### Privacy angle
+#### For homelabbers running security tools
 
-- All data stays on your machine. No telemetry, no cloud calls unless you configure external integrations.
-- AI features work with **Ollama** (fully local LLM) — no data leaves your network. Also supports Claude and OpenAI if you prefer cloud LLMs.
-- Apache 2.0 license — use commercially, fork, embed, no restrictions.
-- PostgreSQL for storage — easy to back up, restore, and inspect with standard tools.
+If you're running Wazuh, Security Onion, or Elastic Security at home, OpenSOAR receives their alerts via webhook, automatically extracts IOCs (IPs, domains, hashes, URLs), and runs playbooks. Example: suspicious IP comes in → auto-enrich against VirusTotal and AbuseIPDB → AI generates a summary → notification to Slack/Discord.
 
-#### For the homelabbers
-
-If you're running Wazuh, Security Onion, or Elastic Security at home, OpenSOAR can receive their alerts via webhook, automatically extract IOCs (IPs, domains, hashes), and run playbooks. Example: auto-enrich suspicious IPs against VirusTotal and AbuseIPDB, get an AI-generated summary, and push a notification to your Slack/Discord.
-
-The playbooks are Python files — if you can write a Python script, you can write a playbook:
+The playbooks are Python files:
 
 ```python
 @playbook(trigger="webhook", conditions={"tags": "phishing"})
 async def handle_phishing(alert):
-    # Check URLs against VirusTotal
     vt = await lookup_virustotal(alert.iocs)
-    # AI analyzes the alert + enrichment and gives a verdict
     verdict = await ai_analyze_phishing(alert, vt)
     if verdict["confidence"] > 0.85 and verdict["verdict"] == "benign":
         await auto_resolve(alert, reason=verdict["reasoning"])
@@ -232,14 +261,22 @@ async def handle_phishing(alert):
         await notify_slack("#security", f"Phishing alert: {alert.title}")
 ```
 
+If you can write a Python script, you can write a playbook. No YAML, no visual builder, no proprietary DSL.
+
 #### What it's not
 
-- Not a SIEM (doesn't collect logs — pair it with Elastic/Wazuh/Graylog)
+- Not a SIEM (pair it with Elastic/Wazuh/Graylog)
 - Not a firewall or IDS
-- Not a SaaS product — fully self-hosted, no account needed
+- Not a SaaS — fully self-hosted, no account needed, no phone-home
+
+#### Being honest
+
+We have 5 built-in integrations today (VirusTotal, AbuseIPDB, Slack, Email, Elastic). Shuffle has 200+. We're early. The integration framework is designed for community contributions — each integration is a Python class with a standard interface, auto-discovered at startup. But if you need 50 integrations on day one, we're not there yet.
+
+What we do have that others don't: Python-native playbooks (not YAML), built-in AI that's actually free, and a license that won't change on you.
 
 #### Stack
 
 Python 3.12, FastAPI, PostgreSQL, Redis, Celery, React 19. 168+ tests, CI pipeline, Docker multi-stage builds.
 
-Would love feedback from anyone running security tools in their homelab. What integrations would be most useful? Wazuh polling connector? MISP feed import? Discord notifications?
+What integrations would be most useful for your homelab? Wazuh polling? MISP feeds? Discord notifications? Let us know.
