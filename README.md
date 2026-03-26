@@ -30,14 +30,36 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 ## Why OpenSOAR?
 
-| | **OpenSOAR** | Shuffle SOAR | Tines | Palo Alto XSOAR |
+### vs. Open-Source Alternatives
+
+| | **OpenSOAR** | Shuffle | Tracecat | StackStorm |
 |---|---|---|---|---|
-| License | Apache 2.0 | AGPL-3.0 | Proprietary | Proprietary |
-| Automation language | Python (async) | Visual/JSON | Visual builder | YAML + Python |
-| Per-action billing | No | No | Yes | Yes |
-| Self-hosted | Yes | Yes | No | On-prem option |
-| Built-in AI | Yes (free) | No | Paid add-on | Paid add-on |
-| Playbook style | Code-first | Drag-and-drop | Drag-and-drop | Mixed |
+| GitHub stars | New | ~2,200 | ~3,500 | ~6,000 |
+| License | Apache 2.0 | AGPL-3.0 | AGPL-3.0 | Apache 2.0 |
+| Automation | Python (async) | Visual/JSON workflows | YAML workflows | YAML + Python |
+| Built-in AI | Yes (free) | No | Yes | No |
+| Integrations | 5 built-in | 1,000+ (app library) | Growing | 160+ packs |
+| Playbook style | Code-first | Drag-and-drop | YAML definitions | YAML rules + Python |
+| Backed by | Community | Community | YC W24 | Linux Foundation (minimal activity) |
+
+**Honest take:** Shuffle and StackStorm have far more integrations today. But their approaches — drag-and-drop JSON or YAML rule files — hit a ceiling fast when you need conditional logic, parallel enrichment, or custom response flows. OpenSOAR gives you native Python with `async`/`await`, which means anything you can write in Python, you can automate. No DSL translation layer, no sandbox limitations.
+
+Tracecat is the closest competitor in philosophy (YC-backed, developer-focused) but uses YAML workflows and AGPL licensing, which restricts how you can embed and redistribute it.
+
+**Also worth knowing:**
+- **TheHive** — formerly the go-to open-source SOAR, now archived. StrangeBee pivoted to commercial-only licensing. If you're migrating off TheHive, OpenSOAR is a natural landing spot.
+- **DFIR-IRIS** — excellent open-source incident response platform (LGPL), but focused on case management and forensics, not orchestration/automation. Complementary to OpenSOAR, not a replacement.
+
+### vs. Commercial Platforms
+
+| | **OpenSOAR** | Tines | Palo Alto XSOAR |
+|---|---|---|---|
+| License | Apache 2.0 | Proprietary | Proprietary |
+| Per-action billing | No | Yes | Yes |
+| Self-hosted | Yes | No | On-prem option |
+| Built-in AI | Yes (free) | Paid add-on | Paid add-on |
+| Playbook style | Code-first | Drag-and-drop | Mixed (YAML + Python) |
+| Best for | Python-literate SOC teams | No-code teams | Enterprises with Palo Alto stack |
 
 ---
 
