@@ -52,15 +52,6 @@ jobs:
       - name: Run linter
         run: ruff check src/ tests/
 
-      - name: Verify migrations
-        env:
-          DATABASE_URL: postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar_test
-          JWT_SECRET: test-secret-for-ci
-          API_KEY_SECRET: test-api-key-secret
-        run: |
-          alembic upgrade head
-          alembic check
-
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar_test
@@ -68,6 +59,15 @@ jobs:
           JWT_SECRET: test-secret-for-ci
           API_KEY_SECRET: test-api-key-secret
         run: pytest -v --tb=short
+
+      - name: Verify migrations in sync with models
+        env:
+          DATABASE_URL: postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar_test
+          JWT_SECRET: test-secret-for-ci
+          API_KEY_SECRET: test-api-key-secret
+        run: |
+          alembic upgrade head
+          alembic check
 
   build:
     runs-on: ubuntu-latest

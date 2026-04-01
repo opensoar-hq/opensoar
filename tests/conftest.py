@@ -32,11 +32,14 @@ async def db_engine():
     """
     import subprocess
 
+    from sqlalchemy import text
+
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
 
-    # Drop all tables first for a clean slate
+    # Drop all tables first for a clean slate (including alembic_version)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
 
     # Run Alembic migrations against the test database (same as production)
     project_root = os.path.join(os.path.dirname(__file__), "..")
