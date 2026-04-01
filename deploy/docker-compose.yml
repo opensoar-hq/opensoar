@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: opensoar
+      POSTGRES_USER: opensoar
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensoar}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensoar"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    image: ghcr.io/opensoar-hq/opensoar-core-migrate:latest
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar}@postgres:5432/opensoar
+      JWT_SECRET: ${JWT_SECRET:-changeme}
+      API_KEY_SECRET: ${API_KEY_SECRET:-changeme}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: ghcr.io/opensoar-hq/opensoar-core-api:latest
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar}@postgres:5432/opensoar
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_SECRET: ${API_KEY_SECRET:-changeme}
+      PLAYBOOK_DIRS: /app/playbooks
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: ghcr.io/opensoar-hq/opensoar-core-worker:latest
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar}@postgres:5432/opensoar
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY_SECRET: ${API_KEY_SECRET:-changeme}
+      PLAYBOOK_DIRS: /app/playbooks
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  ui:
+    image: ghcr.io/opensoar-hq/opensoar-core-ui:latest
+    ports:
+      - "${UI_PORT:-3000}:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

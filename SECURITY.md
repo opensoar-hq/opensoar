@@ -43,9 +43,8 @@ We ask that you give us reasonable time to address the issue before public discl
 ## Scope
 
 This policy applies to:
-- `opensoar-core` (API, worker, UI)
+- `opensoar-core` (API, worker, UI, deployment configs)
 - `opensoar-sdk`
-- `opensoar-deploy`
 - Official Docker images on GHCR
 
 Third-party integrations should be reported to their respective maintainers.

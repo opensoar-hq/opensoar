@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # OpenSOAR One-Click Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/opensoar-hq/opensoar-core/main/scripts/install.sh | bash
+# Usage: curl -fsSL https://opensoar.app/install.sh | sh
 
 OPENSOAR_DIR="${OPENSOAR_DIR:-opensoar}"
-REPO_URL="https://github.com/opensoar-hq/opensoar-deploy.git"
+BASE_URL="https://raw.githubusercontent.com/opensoar-hq/opensoar-core/main/deploy"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -20,19 +20,21 @@ error() { echo -e "${RED}[opensoar]${NC} $*" >&2; exit 1; }
 command -v docker >/dev/null 2>&1 || error "Docker is not installed. Install it from https://docs.docker.com/get-docker/"
 docker compose version >/dev/null 2>&1 || error "Docker Compose v2 is required. Update Docker or install the compose plugin."
 docker info >/dev/null 2>&1 || error "Docker daemon is not running. Start Docker and try again."
+command -v curl >/dev/null 2>&1 || error "curl is required but not installed."
 
 info "Prerequisites OK (docker + docker compose)"
 
-# --- Clone or update deploy repo ---
-if [ -d "$OPENSOAR_DIR" ]; then
-  warn "Directory '$OPENSOAR_DIR' already exists — updating"
-  cd "$OPENSOAR_DIR"
-  git pull --ff-only 2>/dev/null || warn "Could not pull updates (non-fatal)"
+# --- Set up directory ---
+mkdir -p "$OPENSOAR_DIR"
+cd "$OPENSOAR_DIR"
+
+# --- Download docker-compose.yml ---
+if [ -f docker-compose.yml ]; then
+  info "Updating docker-compose.yml..."
 else
-  info "Cloning opensoar-deploy..."
-  git clone --depth 1 "$REPO_URL" "$OPENSOAR_DIR"
-  cd "$OPENSOAR_DIR"
+  info "Downloading docker-compose.yml..."
 fi
+curl -fsSL "$BASE_URL/docker-compose.yml" -o docker-compose.yml
 
 # --- Generate .env if missing ---
 if [ ! -f .env ]; then

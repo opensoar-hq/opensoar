@@ -25,6 +25,7 @@ opensoar-core/
 ├── migrations/            # Alembic migrations
 ├── playbooks/examples/    # Example playbooks
 ├── .github/workflows/     # CI: test + build Docker images
+├── deploy/                # Production deploy config (docker-compose.yml, .env.example)
 ├── Dockerfile             # Multi-target: api, worker, migrate, ui
 └── .dockerignore
 ```
@@ -89,21 +90,6 @@ opensoar-integrations/
 
 ---
 
-### opensoar-deploy
-Deployment configurations — Docker Compose, environment templates.
-
-```
-opensoar-deploy/
-├── docker-compose.yml      # Production: pulls images from GHCR
-├── docker-compose.dev.yml  # Dev: mounts source, hot reload
-├── .env.example
-└── README.md
-```
-
-**License**: Apache 2.0
-
----
-
 ### opensoar-www
 Landing page at [opensoar.app](https://opensoar.app). Astro static site deployed via Cloudflare Pages.
 
@@ -118,7 +104,6 @@ Landing page at [opensoar.app](https://opensoar.app). Astro static site deployed
 | opensoar-core | Active | `ghcr.io/opensoar-hq/opensoar-core-{api,worker,migrate,ui}` |
 | opensoar-sdk | Active | `pypi.org/project/opensoar-sdk` |
 | opensoar-integrations | Active | Community packs (5 connectors) |
-| opensoar-deploy | Active | Config only |
 | opensoar-www | Active | Cloudflare Pages |
 
 The core platform ships with AI features (summarization, triage, playbook generation, correlation) included — all under Apache 2.0.
