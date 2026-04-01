@@ -25,11 +25,35 @@ TEST_DATABASE_URL = os.environ.get(
 
 @pytest.fixture(scope="session")
 async def db_engine():
-    """Create engine and tables once per session."""
+    """Create engine and apply migrations once per session.
+
+    Uses Alembic migrations (not Base.metadata.create_all) so tests exercise
+    the same schema path as production.  This catches missing migrations early.
+    """
+    import subprocess
+
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
+
+    # Drop all tables first for a clean slate
     async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(Base.metadata.drop_all)
+
+    # Run Alembic migrations against the test database (same as production)
+    project_root = os.path.join(os.path.dirname(__file__), "..")
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=project_root,
+        env={**os.environ, "DATABASE_URL": TEST_DATABASE_URL},
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Alembic migration failed:\n{result.stdout}\n{result.stderr}"
+        )
+
     yield eng
+
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     await eng.dispose()
