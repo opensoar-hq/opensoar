@@ -180,6 +180,6 @@ Verified against official API docs — Anthropic Messages API, OpenAI Chat Compl
 
 - **Single source of truth**: Don't maintain the same info in multiple .md files
 - Core README has the roadmap table — keep it high-level (one line per phase)
-- Detailed architecture in `docs/architecture.md`
+- Detailed architecture in `docs/docs/engineering/architecture.md`
 - Business strategy docs stay in private repos only
 - When updating state, grep for stale references across all public repos before committing

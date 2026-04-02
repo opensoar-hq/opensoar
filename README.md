@@ -26,6 +26,8 @@ git clone https://github.com/opensoar-hq/opensoar-core.git && cd opensoar-core &
 
 Then open [http://localhost:3000](http://localhost:3000).
 
+Docs: [docs.opensoar.app](https://docs.opensoar.app)
+
 ---
 
 ## Why OpenSOAR?
@@ -169,9 +171,13 @@ opensoar/
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — System design, component breakdown, deployment models
-- [Design Decisions](docs/design-decisions.md) — UX and architectural rationale
-- [Repository Structure](docs/repository-structure.md) — Multi-repo layout
+User-facing documentation lives at **[docs.opensoar.app](https://docs.opensoar.app)**.
+
+Engineering and contributor docs in this repo:
+
+- [Architecture](docs/docs/engineering/architecture.md) — System design, component breakdown, deployment models
+- [Design Decisions](docs/docs/engineering/design-decisions.md) — UX and architectural rationale
+- [Repository Structure](docs/docs/engineering/repository-structure.md) — Multi-repo layout
 
 ---
 

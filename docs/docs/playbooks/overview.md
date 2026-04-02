@@ -1,0 +1,78 @@
+---
+icon: lucide/code-2
+---
+
+# Playbooks Overview
+
+OpenSOAR playbooks are plain Python modules. The system discovers them from configured directories and registers them through decorators at import time.
+
+## Basic Structure
+
+```python
+from opensoar import playbook, action
+import asyncio
+
+
+@action(name="enrich_ip", timeout=30, retries=2, retry_backoff=2.0)
+async def enrich_ip(ip: str | None) -> dict:
+    if not ip:
+        return {"status": "missing"}
+    return {"status": "ok", "ip": ip}
+
+
+@playbook(
+    trigger="webhook",
+    conditions={"severity": ["high", "critical"]},
+    description="Enrich and triage high-severity alerts",
+)
+async def triage_high_severity(alert_data):
+    result = await enrich_ip(alert_data.get("source_ip"))
+    return {"enrichment": result}
+```
+
+## Core Concepts
+
+### `@playbook`
+
+The `@playbook` decorator defines:
+
+- trigger type
+- matching conditions
+- optional description
+- whether the playbook is enabled
+
+### `@action`
+
+The `@action` decorator wraps a step with:
+
+- execution tracking
+- timeout handling
+- retries
+- backoff
+
+### Parallel Execution
+
+Use normal Python async patterns:
+
+```python
+vt_result, abuse_result = await asyncio.gather(
+    lookup_virustotal(iocs),
+    lookup_abuseipdb(source_ip),
+)
+```
+
+## Recommended Workflow
+
+1. Write a playbook in `playbooks/` or another configured directory.
+2. Test it like normal Python code.
+3. Start or restart the API and worker so the playbook is discovered consistently.
+4. Confirm it appears in the playbooks API or UI.
+5. Trigger it with a matching alert.
+
+## What OpenSOAR Does Not Have Yet
+
+- no dedicated playbook upload API
+- no dedicated playbook UI publishing workflow
+- no separate sync button for playbooks
+
+For the current loading model, read [Loading and Syncing Playbooks](loading-and-sync.md).

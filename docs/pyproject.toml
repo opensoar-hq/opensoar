@@ -1,0 +1,12 @@
+[project]
+name = "opensoar-docs"
+version = "0.1.0"
+description = "Public documentation site for OpenSOAR"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "zensical>=0.0.31",
+]
