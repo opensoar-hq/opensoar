@@ -4,9 +4,17 @@ icon: lucide/rocket
 
 # Getting Started
 
-This guide gets a local OpenSOAR stack running with Docker Compose and explains the minimum mental model you need before writing playbooks.
+This guide is the practical setup path: get a local OpenSOAR stack running, confirm the services work, and understand what to do next.
 
-## What You Get
+## Before You Start
+
+You need:
+
+- Docker
+- Docker Compose
+- a clone of `opensoar-core`
+
+## What You Start
 
 The default stack starts:
 
@@ -30,7 +38,7 @@ Then open:
 - UI: `http://localhost:3000`
 - API docs: `http://localhost:8000/docs`
 
-## Send a Test Alert
+## Verify Ingestion
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/webhooks/alerts \
@@ -44,7 +52,9 @@ curl -X POST http://localhost:8000/api/v1/webhooks/alerts \
   }'
 ```
 
-## How OpenSOAR Thinks About Automation
+If the stack is healthy, the alert should be accepted and routed through the normal ingestion flow.
+
+## Understand The Automation Model
 
 OpenSOAR does not use a visual playbook builder or a YAML workflow DSL.
 
@@ -60,4 +70,5 @@ Instead:
 
 - Read [Playbooks Overview](playbooks/overview.md)
 - Read [Loading and Syncing Playbooks](playbooks/loading-and-sync.md)
+- Read [Docker Deployment](deployment/docker.md)
 - Review [Playbook Troubleshooting](troubleshooting/playbooks.md)

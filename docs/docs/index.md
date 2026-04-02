@@ -6,21 +6,27 @@ icon: lucide/shield
 
 OpenSOAR is an open-source SOAR platform built around Python-native playbooks, case management, integrations, and async execution.
 
-This site is the canonical documentation for OpenSOAR. It covers both product usage and contributor-facing engineering references.
+This site is the canonical documentation for OpenSOAR. It covers product usage, operations, and contributor-facing engineering references.
 
-## Start Here
+## What To Read First
 
 - [Getting Started](getting-started.md)
 - [Playbooks Overview](playbooks/overview.md)
 - [Loading and Syncing Playbooks](playbooks/loading-and-sync.md)
 - [Docker Deployment](deployment/docker.md)
-- [Integrations Overview](integrations/overview.md)
-- [API Overview](api/overview.md)
-- [Migrate from TheHive](migrations/thehive.md)
-- [Playbook Troubleshooting](troubleshooting/playbooks.md)
-- [Engineering Overview](engineering/index.md)
 
-## Product Boundaries
+## Docs Map
+
+- **Getting Started**: local setup and first-run flow
+- **Playbooks**: how automation is written and loaded
+- **Deployment**: runtime and operational guidance
+- **Integrations**: connector model and usage
+- **API**: endpoint overview
+- **Migrations**: moving from TheHive
+- **Troubleshooting**: common playbook issues
+- **Engineering**: architecture and contributor references
+
+## Important Product Boundaries
 
 OpenSOAR currently follows a playbooks-as-code model:
 
@@ -29,7 +35,7 @@ OpenSOAR currently follows a playbooks-as-code model:
 - there is no separate playbook upload API or UI yet
 - database migrations are handled by the `migrate` service, not by the playbook loader
 
-That distinction matters because a lot of first-time setup confusion comes from assuming playbooks are uploaded or synchronized through the database migration flow. They are not.
+That distinction matters because a lot of first-time confusion comes from assuming playbooks are uploaded or synchronized through the database migration flow. They are not.
 
 ## Repositories
 

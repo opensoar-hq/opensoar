@@ -37,6 +37,37 @@ copyright = """
 Copyright &copy; 2026 OpenSOAR
 """
 
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = "getting-started.md" },
+  { "Playbooks" = [
+    { "Overview" = "playbooks/overview.md" },
+    { "Loading and Syncing" = "playbooks/loading-and-sync.md" },
+  ] },
+  { "Deployment" = [
+    { "Docker" = "deployment/docker.md" },
+  ] },
+  { "Integrations" = [
+    { "Overview" = "integrations/overview.md" },
+  ] },
+  { "API" = [
+    { "Overview" = "api/overview.md" },
+  ] },
+  { "Migrations" = [
+    { "From TheHive" = "migrations/thehive.md" },
+    { "Detailed TheHive Notes" = "migrations/from-thehive-detailed.md" },
+  ] },
+  { "Troubleshooting" = [
+    { "Playbooks" = "troubleshooting/playbooks.md" },
+  ] },
+  { "Engineering" = [
+    { "Overview" = "engineering/index.md" },
+    { "Architecture" = "engineering/architecture.md" },
+    { "Design Decisions" = "engineering/design-decisions.md" },
+    { "Repository Structure" = "engineering/repository-structure.md" },
+  ] },
+]
+
 # Zensical supports both implicit navigation and explicitly defined navigation.
 # If you decide not to define a navigation here then Zensical will simply
 # derive the navigation structure from the directory structure of your
