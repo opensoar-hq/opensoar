@@ -1,0 +1,37 @@
+:root {
+  --opensoar-bg: #161b22;
+  --opensoar-surface: #0d1117;
+  --opensoar-border: #30363d;
+  --opensoar-text: #e6edf3;
+  --opensoar-muted: #8b949e;
+  --opensoar-accent: #3fb950;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: var(--opensoar-bg);
+  --md-default-fg-color: var(--opensoar-text);
+  --md-default-fg-color--light: var(--opensoar-muted);
+  --md-default-fg-color--lighter: var(--opensoar-muted);
+  --md-default-fg-color--lightest: var(--opensoar-border);
+  --md-code-bg-color: var(--opensoar-surface);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--opensoar-border);
+}
+
+.md-header__button.md-logo img,
+.md-nav__button.md-logo img {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.md-typeset a,
+.md-nav__link:hover,
+.md-nav__link--active {
+  color: var(--opensoar-accent);
+}
+
+.md-typeset code {
+  border-radius: 0.35rem;
+}

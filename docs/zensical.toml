@@ -57,7 +57,7 @@ Copyright &copy; 2026 OpenSOAR
 #
 # Read more: https://zensical.org/docs/customization/#additional-css
 #
-#extra_css = ["stylesheets/extra.css"]
+extra_css = ["stylesheets/extra.css"]
 
 # With the `extra_javascript` option you can add your own JavaScript to your
 # project to customize the behavior according to your needs.
@@ -71,6 +71,8 @@ Copyright &copy; 2026 OpenSOAR
 # Section for configuring theme options
 # ----------------------------------------------------------------------------
 [project.theme]
+logo = "assets/logo.svg"
+favicon = "assets/favicon.svg"
 
 # change this to "classic" to use the traditional Material for MkDocs look.
 #variant = "classic"
@@ -93,8 +95,6 @@ Copyright &copy; 2026 OpenSOAR
 # - https://zensical.org/docs/setup/logo-and-icons/#favicon
 # - https://developer.mozilla.org/en-US/docs/Glossary/Favicon
 #
-#favicon = "images/favicon.png"
-
 # Zensical supports more than 60 different languages. This means that the
 # labels and tooltips that Zensical's templates produce are translated.
 # The "language" option allows you to set the language used. This language
@@ -109,6 +109,10 @@ Copyright &copy; 2026 OpenSOAR
 # - https://zensical.org/docs/setup/language/
 #
 language = "en"
+
+[project.theme.font]
+text = "Inter Tight"
+code = "JetBrains Mono"
 
 # Zensical provides a number of feature toggles that change the behavior
 # of the documentation site.
@@ -289,11 +293,15 @@ features = [
 # ----------------------------------------------------------------------------
 [[project.theme.palette]]
 scheme = "default"
+palette.primary = "blue-grey"
+palette.accent = "green"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 scheme = "slate"
+palette.primary = "black"
+palette.accent = "green"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
 
