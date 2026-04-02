@@ -2,11 +2,11 @@
 icon: lucide/shield
 ---
 
-# OpenSOAR Documentation
+# Overview
 
 OpenSOAR is an open-source SOAR platform built around Python-native playbooks, case management, integrations, and async execution.
 
-This site is the canonical documentation for OpenSOAR. It covers product usage, operations, and contributor-facing engineering references.
+This is the canonical documentation site for OpenSOAR. Use it as the map for product docs, operations guidance, and contributor-facing engineering references.
 
 ## What To Read First
 
@@ -25,6 +25,8 @@ This site is the canonical documentation for OpenSOAR. It covers product usage, 
 - **Migrations**: moving from TheHive
 - **Troubleshooting**: common playbook issues
 - **Engineering**: architecture and contributor references
+
+If you are new to OpenSOAR, start with [Getting Started](getting-started.md). If you are already running it and need a specific topic, use the left navigation.
 
 ## Important Product Boundaries
 

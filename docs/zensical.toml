@@ -38,7 +38,7 @@ Copyright &copy; 2026 OpenSOAR
 """
 
 nav = [
-  { "Home" = "index.md" },
+  { "Overview" = "index.md" },
   { "Getting Started" = "getting-started.md" },
   { "Playbooks" = [
     { "Overview" = "playbooks/overview.md" },
@@ -55,7 +55,6 @@ nav = [
   ] },
   { "Migrations" = [
     { "From TheHive" = "migrations/thehive.md" },
-    { "Detailed TheHive Notes" = "migrations/from-thehive-detailed.md" },
   ] },
   { "Troubleshooting" = [
     { "Playbooks" = "troubleshooting/playbooks.md" },
