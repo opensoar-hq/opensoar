@@ -80,104 +80,18 @@ Tracecat is the closest competitor in philosophy (YC-backed, developer-focused) 
 
 ---
 
-## Quick Start
-
-```bash
-# Clone and start
-git clone https://github.com/opensoar-hq/opensoar-core.git
-cd opensoar-core
-docker compose up -d
-
-# Send a test alert
-curl -X POST http://localhost:8000/api/v1/webhooks/alerts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "rule_name": "Brute Force Detected",
-    "severity": "high",
-    "source_ip": "203.0.113.42",
-    "hostname": "web-prod-01",
-    "tags": ["authentication", "brute-force"]
-  }'
-
-# Open the UI
-open http://localhost:3000
-```
-
----
-
-## Example Playbook
-
-```python
-from opensoar import playbook, action, Alert
-import asyncio
-
-@playbook(trigger="webhook", conditions={"severity": ["high", "critical"]})
-async def triage_high_severity(alert: Alert):
-    # Enrich in parallel
-    vt_result, abuse_result = await asyncio.gather(
-        lookup_virustotal(alert.iocs),
-        lookup_abuseipdb(alert.source_ip),
-    )
-
-    if abuse_result.confidence_score > 80:
-        await isolate_host(alert.hostname)
-        await notify_slack(
-            channel="#soc-critical",
-            message=f"🚨 {alert.title} — host isolated, VT: {vt_result.positives}/{vt_result.total}"
-        )
-    else:
-        await alert.update(determination="benign", status="resolved")
-```
-
-No DSL. No YAML. Just Python.
-
----
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A["Elastic / Webhooks"] --> B["Ingestion\nNormalize → Extract IOCs → Deduplicate"]
-    B --> C["Trigger Engine\nMatch alert to playbook conditions"]
-    C --> D["Celery Worker\nAsync playbook execution\n@action tracking, retries, timeouts"]
-    D --> E["Actions\nEnrich (VT, AbuseIPDB) → Respond (isolate, block)\n→ Notify (Slack, email) → Update (tickets, cases)"]
-```
-
-**Stack**: Python 3.12, FastAPI, SQLAlchemy (async), PostgreSQL, Redis, Celery, React 19, Vite
-
----
-
-## Project Structure
-
-```
-opensoar/
-├── src/opensoar/
-│   ├── api/            # FastAPI endpoints (alerts, playbooks, runs, dashboard)
-│   ├── auth/           # JWT + API key authentication
-│   ├── core/           # Playbook engine, triggers, executor, registry
-│   ├── ingestion/      # Alert normalization, webhook processing
-│   ├── integrations/   # Elastic, VirusTotal, AbuseIPDB, Slack, Email
-│   ├── models/         # SQLAlchemy models
-│   ├── schemas/        # Pydantic v2 request/response schemas
-│   └── worker/         # Celery tasks
-├── ui/                 # React frontend
-├── migrations/         # Alembic database migrations
-├── playbooks/          # Example playbooks
-├── docker-compose.yml  # Full stack: API + worker + PostgreSQL + Redis
-└── Dockerfile
-```
-
----
-
 ## Documentation
 
-User-facing documentation lives at **[docs.opensoar.app](https://docs.opensoar.app)**.
+Canonical documentation lives at **[docs.opensoar.app](https://docs.opensoar.app)**.
 
-Engineering and contributor docs in this repo:
+Start there for:
 
-- [Architecture](docs/docs/engineering/architecture.md) — System design, component breakdown, deployment models
-- [Design Decisions](docs/docs/engineering/design-decisions.md) — UX and architectural rationale
-- [Repository Structure](docs/docs/engineering/repository-structure.md) — Multi-repo layout
+- installation and getting started
+- playbook authoring and loading
+- deployment and operations
+- API usage
+- troubleshooting
+- engineering and architecture references
 
 ---
 
