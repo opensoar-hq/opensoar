@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
+from sqlalchemy import select
 
 from opensoar.auth.jwt import create_access_token, decode_token
 from opensoar.config import settings
@@ -67,6 +68,28 @@ class TestRegister:
         resp = await client.post("/api/v1/auth/register", json=body)
         assert resp.status_code == 409
 
+    async def test_register_disabled_when_local_registration_off(self, client):
+        from opensoar.main import app
+        from opensoar.plugins import configure_local_auth
+
+        original_login = app.state.local_auth_enabled
+        original_registration = app.state.local_registration_enabled
+        try:
+            configure_local_auth(app, registration_enabled=False)
+            resp = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "username": f"blocked_{uuid.uuid4().hex[:8]}",
+                    "display_name": "Blocked User",
+                    "password": "securepass123",
+                },
+            )
+        finally:
+            app.state.local_auth_enabled = original_login
+            app.state.local_registration_enabled = original_registration
+
+        assert resp.status_code == 403
+
 
 # ── Login endpoint ──────────────────────────────────────────
 
@@ -112,6 +135,43 @@ class TestLogin:
         )
         assert resp.status_code == 401
 
+    async def test_login_without_local_password_rejected(self, client, session):
+        from opensoar.models.analyst import Analyst
+
+        analyst = Analyst(
+            username=f"sso_{uuid.uuid4().hex[:8]}",
+            display_name="SSO Only",
+            email="sso@opensoar.app",
+            password_hash=None,
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.commit()
+
+        resp = await client.post(
+            "/api/v1/auth/login",
+            json={"username": analyst.username, "password": "any-password"},
+        )
+        assert resp.status_code == 401
+
+    async def test_login_disabled_when_local_login_off(self, client):
+        from opensoar.main import app
+        from opensoar.plugins import configure_local_auth
+
+        original_login = app.state.local_auth_enabled
+        original_registration = app.state.local_registration_enabled
+        try:
+            configure_local_auth(app, login_enabled=False)
+            resp = await client.post(
+                "/api/v1/auth/login",
+                json={"username": "nobody", "password": "pass"},
+            )
+        finally:
+            app.state.local_auth_enabled = original_login
+            app.state.local_registration_enabled = original_registration
+
+        assert resp.status_code == 403
+
 
 # ── /me endpoint ────────────────────────────────────────────
 
@@ -138,3 +198,88 @@ class TestMe:
     async def test_me_unauthenticated(self, client):
         resp = await client.get("/api/v1/auth/me")
         assert resp.status_code == 401
+
+
+class TestCapabilities:
+    async def test_capabilities_default_local_auth(self, client):
+        resp = await client.get("/api/v1/auth/capabilities")
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "local_login_enabled": True,
+            "local_registration_enabled": True,
+            "providers": [],
+        }
+
+    async def test_capabilities_reflect_app_state(self, client):
+        from opensoar.main import app
+
+        original_login = app.state.local_auth_enabled
+        original_registration = app.state.local_registration_enabled
+        original_providers = list(app.state.auth_providers)
+
+        app.state.local_auth_enabled = False
+        app.state.local_registration_enabled = False
+        app.state.auth_providers = [
+            {
+                "id": "oidc-keycloak",
+                "name": "Keycloak",
+                "type": "oidc",
+                "login_url": "/api/v1/sso/oidc/authorize?provider_id=oidc-keycloak",
+            }
+        ]
+
+        try:
+            resp = await client.get("/api/v1/auth/capabilities")
+        finally:
+            app.state.local_auth_enabled = original_login
+            app.state.local_registration_enabled = original_registration
+            app.state.auth_providers = original_providers
+
+        assert resp.status_code == 200
+        assert resp.json() == {
+            "local_login_enabled": False,
+            "local_registration_enabled": False,
+            "providers": [
+                {
+                    "id": "oidc-keycloak",
+                    "name": "Keycloak",
+                    "type": "oidc",
+                    "login_url": "/api/v1/sso/oidc/authorize?provider_id=oidc-keycloak",
+                }
+            ],
+        }
+
+
+class TestExternalIdentities:
+    async def test_external_identity_can_be_persisted(self, session):
+        from opensoar.models.analyst import Analyst
+        from opensoar.models.analyst_identity import AnalystIdentity
+
+        analyst = Analyst(
+            username=f"linked_{uuid.uuid4().hex[:8]}",
+            display_name="Linked Analyst",
+            email="linked@opensoar.app",
+            password_hash=None,
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.flush()
+
+        identity = AnalystIdentity(
+            analyst_id=analyst.id,
+            provider_type="oidc",
+            issuer="https://idp.example.com",
+            subject=f"user-{uuid.uuid4().hex[:8]}",
+            email="linked@opensoar.app",
+            claims_json={"groups": ["soc-analysts"]},
+        )
+        session.add(identity)
+        await session.commit()
+
+        result = await session.execute(
+            select(AnalystIdentity).where(AnalystIdentity.id == identity.id)
+        )
+        stored = result.scalar_one()
+        assert stored.analyst_id == analyst.id
+        assert stored.provider_type == "oidc"

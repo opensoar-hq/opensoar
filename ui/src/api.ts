@@ -157,6 +157,19 @@ export interface TokenResponse {
   analyst: Analyst
 }
 
+export interface AuthProviderCapability {
+  id: string
+  name: string
+  type: string
+  login_url: string | null
+}
+
+export interface AuthCapabilities {
+  local_login_enabled: boolean
+  local_registration_enabled: boolean
+  providers: AuthProviderCapability[]
+}
+
 export interface Activity {
   id: string
   alert_id: string
@@ -257,6 +270,7 @@ export const api = {
     login: (data: { username: string; password: string }) =>
       postJSON<TokenResponse>('/auth/login', data),
     me: () => fetchJSON<Analyst>('/auth/me'),
+    capabilities: () => fetchJSON<AuthCapabilities>('/auth/capabilities'),
   },
   webhooks: {
     createAlert: (payload: Record<string, unknown>) =>

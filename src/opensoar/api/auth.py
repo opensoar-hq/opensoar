@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import create_access_token, require_analyst
 from opensoar.models.analyst import Analyst
+from opensoar.plugins import get_auth_capabilities
+from opensoar.schemas.auth import AuthCapabilitiesResponse
 from opensoar.schemas.analyst import (
     AnalystCreate,
     AnalystLogin,
@@ -27,11 +29,20 @@ def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
 
 
+@router.get("/capabilities", response_model=AuthCapabilitiesResponse)
+async def capabilities(request: Request):
+    return AuthCapabilitiesResponse.model_validate(get_auth_capabilities(request.app))
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(
+    request: Request,
     body: AnalystCreate,
     session: AsyncSession = Depends(get_db),
 ):
+    if not get_auth_capabilities(request.app)["local_registration_enabled"]:
+        raise HTTPException(status_code=403, detail="Local registration is disabled")
+
     existing = await session.execute(
         select(Analyst).where(Analyst.username == body.username)
     )
@@ -58,14 +69,18 @@ async def register(
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+    request: Request,
     body: AnalystLogin,
     session: AsyncSession = Depends(get_db),
 ):
+    if not get_auth_capabilities(request.app)["local_login_enabled"]:
+        raise HTTPException(status_code=403, detail="Local login is disabled")
+
     result = await session.execute(
         select(Analyst).where(Analyst.username == body.username)
     )
     analyst = result.scalar_one_or_none()
-    if not analyst or not _verify_password(body.password, analyst.password_hash):
+    if not analyst or not analyst.password_hash or not _verify_password(body.password, analyst.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     if not analyst.is_active:
