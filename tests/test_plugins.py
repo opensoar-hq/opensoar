@@ -8,12 +8,15 @@ from opensoar.plugins import (
     configure_alembic_version_locations,
     dispatch_audit_event,
     dispatch_api_key_validators,
+    apply_tenant_access_query,
+    enforce_tenant_access,
     get_auth_capabilities,
     get_plugin_migration_config,
     import_optional_plugin_models,
     load_optional_plugins,
     register_api_key_validator,
     register_audit_sink,
+    register_tenant_access_validator,
 )
 from opensoar.schemas.audit import AuditEvent
 
@@ -181,3 +184,40 @@ async def test_dispatch_api_key_validators_calls_registered_validator():
     )
 
     assert seen == [("db-key", "request", "webhooks:ingest")]
+
+
+async def test_tenant_access_validator_can_modify_query_and_validate_resource():
+    app = FastAPI()
+    seen = []
+
+    async def validator(**kwargs):
+        seen.append(kwargs["action"])
+        if "query" in kwargs:
+            return f"{kwargs['query']}-scoped"
+        if kwargs["resource"] == "blocked":
+            raise ValueError("blocked")
+
+    register_tenant_access_validator(app, validator)
+
+    scoped_query = await apply_tenant_access_query(
+        app,
+        query="query",
+        resource_type="alert",
+        action="list",
+        analyst="analyst",
+        request="request",
+        session="session",
+    )
+    assert scoped_query == "query-scoped"
+
+    await enforce_tenant_access(
+        app,
+        resource="allowed",
+        resource_type="alert",
+        action="read",
+        analyst="analyst",
+        request="request",
+        session="session",
+    )
+
+    assert seen == ["list", "read"]
