@@ -322,18 +322,9 @@ features = [
 # - https://zensical.org/docs/setup/colors/
 # ----------------------------------------------------------------------------
 [[project.theme.palette]]
-scheme = "default"
-palette.primary = "blue-grey"
-palette.accent = "green"
-toggle.icon = "lucide/sun"
-toggle.name = "Switch to dark mode"
-
-[[project.theme.palette]]
 scheme = "slate"
 palette.primary = "black"
 palette.accent = "green"
-toggle.icon = "lucide/moon"
-toggle.name = "Switch to light mode"
 
 # ----------------------------------------------------------------------------
 # The "extra" section contains miscellaneous settings.
