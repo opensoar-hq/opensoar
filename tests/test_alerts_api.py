@@ -105,6 +105,31 @@ class TestGetAlert:
 
         assert blocked.status_code == 403
 
+    async def test_tenant_validator_blocks_alert_runs(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.plugins import register_tenant_access_validator
+
+        resp = await client.post(
+            "/api/v1/webhooks/alerts",
+            json={"rule_name": "Blocked Runs", "severity": "low", "partner": "globex"},
+        )
+        alert_id = resp.json()["alert_id"]
+
+        async def validator(**kwargs):
+            resource = kwargs.get("resource")
+            if resource is not None and getattr(resource, "partner", None) == "globex":
+                raise HTTPException(status_code=403, detail="Tenant access denied")
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            blocked = await client.get(f"/api/v1/alerts/{alert_id}/runs", headers=registered_analyst["headers"])
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert blocked.status_code == 403
+
 
 class TestUpdateAlert:
     async def test_update_severity(self, client, sample_alert_via_api, registered_analyst):
