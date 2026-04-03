@@ -70,5 +70,6 @@ Instead:
 
 - Read [Playbooks Overview](playbooks/overview.md)
 - Read [Loading and Syncing Playbooks](playbooks/loading-and-sync.md)
+- Read [Authentication and SSO](deployment/authentication.md) if you need to understand the current local-auth vs external-auth posture
 - Read [Docker Deployment](deployment/docker.md)
 - Review [Playbook Troubleshooting](troubleshooting/playbooks.md)
