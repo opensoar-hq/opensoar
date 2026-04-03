@@ -28,6 +28,8 @@ def initialize_plugin_state(app: FastAPI) -> None:
         app.state.auth_providers = []
     if not hasattr(app.state, "audit_sinks"):
         app.state.audit_sinks = []
+    if not hasattr(app.state, "api_key_validators"):
+        app.state.api_key_validators = []
     if not hasattr(app.state, "local_auth_enabled"):
         app.state.local_auth_enabled = True
     if not hasattr(app.state, "local_registration_enabled"):
@@ -168,10 +170,29 @@ def register_audit_sink(app: FastAPI, sink: Any) -> None:
     app.state.audit_sinks.append(sink)
 
 
+def register_api_key_validator(app: FastAPI, validator: Any) -> None:
+    initialize_plugin_state(app)
+    app.state.api_key_validators.append(validator)
+
+
 async def dispatch_audit_event(app: FastAPI, event: AuditEvent) -> None:
     initialize_plugin_state(app)
     for sink in list(app.state.audit_sinks):
         result = sink(event)
+        if inspect.isawaitable(result):
+            await result
+
+
+async def dispatch_api_key_validators(
+    app: FastAPI,
+    *,
+    api_key: Any,
+    request: Any,
+    required_scope: str,
+) -> None:
+    initialize_plugin_state(app)
+    for validator in list(app.state.api_key_validators):
+        result = validator(api_key=api_key, request=request, required_scope=required_scope)
         if inspect.isawaitable(result):
             await result
 

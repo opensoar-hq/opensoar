@@ -1,6 +1,8 @@
 """Tests for webhook endpoint authentication via API key."""
 from __future__ import annotations
 
+from fastapi import HTTPException
+
 from opensoar.plugins import register_audit_sink
 
 
@@ -87,6 +89,35 @@ class TestWebhookAuth:
         matching = [k for k in keys if k["name"] == "track-usage-key"]
         assert len(matching) == 1
         assert matching[0].get("last_used_at") is not None
+
+    async def test_webhook_validator_can_deny_request(self, client, registered_admin):
+        from opensoar.main import app
+        from opensoar.plugins import register_api_key_validator
+
+        resp = await client.post(
+            "/api/v1/api-keys",
+            json={"name": "scoped-key"},
+            headers=registered_admin["headers"],
+        )
+        api_key = resp.json()["key"]
+
+        async def validator(*, api_key, request, required_scope):
+            raise HTTPException(status_code=403, detail=f"Missing scope: {required_scope}")
+
+        original_validators = list(app.state.api_key_validators)
+        app.state.api_key_validators = []
+        register_api_key_validator(app, validator)
+        try:
+            blocked = await client.post(
+                "/api/v1/webhooks/alerts",
+                json={"rule_name": "Blocked Alert", "severity": "low"},
+                headers={"X-API-Key": api_key},
+            )
+        finally:
+            app.state.api_key_validators = original_validators
+
+        assert blocked.status_code == 403
+        assert "Missing scope" in blocked.json()["detail"]
 
 
 class TestApiKeyManagement:

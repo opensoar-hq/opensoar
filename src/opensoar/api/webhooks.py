@@ -15,6 +15,7 @@ from opensoar.api.deps import get_db
 from opensoar.auth.api_key import hash_api_key
 from opensoar.ingestion.webhook import process_webhook
 from opensoar.models.api_key import ApiKey
+from opensoar.plugins import dispatch_api_key_validators
 from opensoar.schemas.webhook import WebhookResponse
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ async def _validate_webhook_key(
     session: AsyncSession = Depends(get_db),
     api_key: str | None = Security(_api_key_header),
     x_webhook_signature: str | None = Header(None),
+    required_scope: str = "webhooks:ingest",
 ) -> None:
     """Validate the API key and optional HMAC signature.
 
@@ -70,14 +72,50 @@ async def _validate_webhook_key(
 
     # Update last_used_at
     db_key.last_used_at = datetime.now(timezone.utc)
+    await dispatch_api_key_validators(
+        request.app,
+        api_key=db_key,
+        request=request,
+        required_scope=required_scope,
+    )
     await session.commit()
+
+
+async def _validate_default_webhook_key(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    api_key: str | None = Security(_api_key_header),
+    x_webhook_signature: str | None = Header(None),
+) -> None:
+    await _validate_webhook_key(
+        request,
+        session=session,
+        api_key=api_key,
+        x_webhook_signature=x_webhook_signature,
+        required_scope="webhooks:ingest",
+    )
+
+
+async def _validate_elastic_webhook_key(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    api_key: str | None = Security(_api_key_header),
+    x_webhook_signature: str | None = Header(None),
+) -> None:
+    await _validate_webhook_key(
+        request,
+        session=session,
+        api_key=api_key,
+        x_webhook_signature=x_webhook_signature,
+        required_scope="webhooks:ingest:elastic",
+    )
 
 
 @router.post("/alerts", response_model=WebhookResponse)
 async def receive_alert(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_db),
-    _key: None = Depends(_validate_webhook_key),
+    _key: None = Depends(_validate_default_webhook_key),
 ):
     alert = await process_webhook(session, payload, source="webhook")
 
@@ -108,7 +146,7 @@ async def receive_alert(
 async def receive_elastic_alert(
     payload: dict[str, Any],
     session: AsyncSession = Depends(get_db),
-    _key: None = Depends(_validate_webhook_key),
+    _key: None = Depends(_validate_elastic_webhook_key),
 ):
     alert = await process_webhook(session, payload, source="elastic")
 
