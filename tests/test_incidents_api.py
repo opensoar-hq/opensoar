@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import uuid
 
+from fastapi import HTTPException
+
+from opensoar.plugins import register_tenant_access_validator
 
 class TestIncidentCRUD:
     async def test_create_incident(self, client, registered_analyst):
@@ -175,3 +178,66 @@ class TestIncidentFiltering:
         assert resp.status_code == 200
         for inc in resp.json()["incidents"]:
             assert inc["severity"] == "critical"
+
+    async def test_tenant_validator_filters_incident_list(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.models.incident import Incident
+
+        await client.post(
+            "/api/v1/incidents",
+            json={"title": "Scoped Incident", "severity": "low"},
+            headers=registered_analyst["headers"],
+        )
+        await client.post(
+            "/api/v1/incidents",
+            json={"title": "Blocked Incident", "severity": "low"},
+            headers=registered_analyst["headers"],
+        )
+
+        async def validator(**kwargs):
+            query = kwargs.get("query")
+            if query is not None and kwargs["resource_type"] == "incident":
+                return query.where(Incident.title == "Scoped Incident")
+            return None
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            resp = await client.get("/api/v1/incidents", headers=registered_analyst["headers"])
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert resp.status_code == 200
+        assert {incident["title"] for incident in resp.json()["incidents"]} == {"Scoped Incident"}
+
+    async def test_tenant_validator_blocks_incident_detail_and_update(self, client, registered_analyst):
+        from opensoar.main import app
+
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Blocked Incident Detail", "severity": "low"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        async def validator(**kwargs):
+            resource = kwargs.get("resource")
+            if resource is not None and getattr(resource, "title", "").startswith("Blocked"):
+                raise HTTPException(status_code=403, detail="Tenant access denied")
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            detail = await client.get(f"/api/v1/incidents/{incident_id}", headers=registered_analyst["headers"])
+            update = await client.patch(
+                f"/api/v1/incidents/{incident_id}",
+                json={"severity": "critical"},
+                headers=registered_analyst["headers"],
+            )
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert detail.status_code == 403
+        assert update.status_code == 403
