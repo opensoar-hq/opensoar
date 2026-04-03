@@ -40,6 +40,16 @@ async function patchJSON<T>(path: string, body: Record<string, unknown>): Promis
   return res.json()
 }
 
+async function putJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json()
+}
+
 // Types
 
 export interface Alert {
@@ -219,6 +229,12 @@ export interface ApiKeyInfo {
   key?: string
 }
 
+export interface ApiKeyScopeInfo {
+  api_key_id: string
+  scopes: string[]
+  tenant_id: string | null
+}
+
 export interface Incident2 {
   id: string
   title: string
@@ -232,6 +248,31 @@ export interface Incident2 {
   closed_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface TenantInfo {
+  id: string
+  name: string
+  slug: string
+  legacy_partner_key: string | null
+  is_active: boolean
+  config: Record<string, unknown>
+  alert_count: number
+  analyst_count: number
+}
+
+export interface ReportScheduleInfo {
+  id: string
+  report_type: string
+  format: string
+  cadence: string
+  destination_email: string | null
+  tenant_id: string | null
+  is_active: boolean
+  config: Record<string, unknown>
+  last_run_at: string | null
+  last_run_status: string | null
+  last_run_detail: string | null
 }
 
 export interface Observable {
@@ -345,6 +386,11 @@ export const api = {
     create: (data: { name: string }) => postJSON<ApiKeyInfo>('/api-keys', data),
     revoke: (id: string) => deleteJSON(`/api-keys/${id}`),
   },
+  apiKeyScopes: {
+    get: (id: string) => fetchJSON<ApiKeyScopeInfo>(`/api-key-scopes/${id}`),
+    update: (id: string, data: { scopes: string[]; tenant_id?: string | null }) =>
+      putJSON<ApiKeyScopeInfo>(`/api-key-scopes/${id}`, data as Record<string, unknown>),
+  },
   analysts: {
     list: () => fetchJSON<Analyst[]>('/auth/analysts'),
     update: (id: string, data: { display_name?: string; email?: string; is_active?: boolean; role?: string }) =>
@@ -385,7 +431,31 @@ export const api = {
     create: (data: { type: string; value: string; source?: string }) =>
       postJSON<Observable>('/observables', data),
   },
+  tenants: {
+    list: () => fetchJSON<TenantInfo[]>('/tenants'),
+  },
   dashboard: {
     stats: () => fetchJSON<DashboardStats>('/dashboard/stats'),
+  },
+  reportSchedules: {
+    list: () => fetchJSON<ReportScheduleInfo[]>('/compliance/reports/schedules'),
+    create: (data: {
+      report_type: string
+      format: string
+      cadence: string
+      destination_email?: string
+      tenant_id?: string | null
+      is_active?: boolean
+      config?: Record<string, unknown>
+    }) => postJSON<ReportScheduleInfo>('/compliance/reports/schedules', data as Record<string, unknown>),
+    update: (id: string, data: {
+      cadence?: string
+      destination_email?: string
+      tenant_id?: string | null
+      is_active?: boolean
+      config?: Record<string, unknown>
+    }) => patchJSON<ReportScheduleInfo>(`/compliance/reports/schedules/${id}`, data as Record<string, unknown>),
+    remove: (id: string) => deleteJSON(`/compliance/reports/schedules/${id}`),
+    run: (id: string) => postJSON<{ detail: string; execution: Record<string, unknown>; schedule: ReportScheduleInfo }>(`/compliance/reports/schedules/${id}/run`, {}),
   },
 }
