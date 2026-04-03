@@ -15,6 +15,10 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from opensoar.db import Base
+import opensoar.models  # noqa: F401 - populate core metadata for drop_all/create paths
+from opensoar.plugins import import_optional_plugin_models
+
+import_optional_plugin_models()
 
 # Use DATABASE_URL env var if set (CI), otherwise default test DB
 TEST_DATABASE_URL = os.environ.get(

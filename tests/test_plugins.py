@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+from types import ModuleType
+
 from fastapi import FastAPI
 
-from opensoar.plugins import get_auth_capabilities, load_optional_plugins
+from opensoar.plugins import (
+    configure_alembic_version_locations,
+    get_auth_capabilities,
+    get_plugin_migration_config,
+    import_optional_plugin_models,
+    load_optional_plugins,
+)
 
 
 class FakeEntryPoint:
-    def __init__(self, name: str, plugin):
+    def __init__(self, name: str, plugin, module: str | None = None):
         self.name = name
         self._plugin = plugin
+        self.module = module
 
     def load(self):
         return self._plugin
@@ -63,3 +72,73 @@ def test_load_optional_plugins_registers_auth_provider(monkeypatch):
             }
         ],
     }
+
+
+def test_get_plugin_migration_config_no_plugins(monkeypatch):
+    monkeypatch.setattr(
+        "opensoar.plugins.iter_plugin_entry_points",
+        lambda group="opensoar.plugins": [],
+    )
+
+    config = get_plugin_migration_config()
+
+    assert config.model_modules == ()
+    assert config.version_locations == ()
+
+
+def test_get_plugin_migration_config_collects_models_and_versions(monkeypatch, tmp_path):
+    plugin_file = tmp_path / "opensoar_ee" / "__init__.py"
+    plugin_file.parent.mkdir()
+    plugin_file.write_text("# plugin module\n")
+
+    plugin_module = ModuleType("opensoar_ee")
+    plugin_module.__file__ = str(plugin_file)
+    plugin_module.PLUGIN_MODEL_MODULES = ("opensoar_ee.models",)
+    plugin_module.PLUGIN_VERSION_LOCATIONS = ("migrations/versions",)
+
+    imported_modules: dict[str, ModuleType] = {
+        "opensoar_ee": plugin_module,
+        "opensoar_ee.models": ModuleType("opensoar_ee.models"),
+    }
+
+    def fake_import_module(name: str):
+        return imported_modules[name]
+
+    def fake_plugin(_app: FastAPI):
+        return None
+
+    monkeypatch.setattr(
+        "opensoar.plugins.iter_plugin_entry_points",
+        lambda group="opensoar.plugins": [
+            FakeEntryPoint("ee", fake_plugin, module="opensoar_ee")
+        ],
+    )
+    monkeypatch.setattr("opensoar.plugins.importlib.import_module", fake_import_module)
+
+    config = get_plugin_migration_config()
+    imported = import_optional_plugin_models()
+
+    assert config.model_modules == ("opensoar_ee.models",)
+    assert config.version_locations == (
+        str((plugin_file.parent / "migrations" / "versions").resolve()),
+    )
+    assert imported == ("opensoar_ee.models",)
+
+
+def test_configure_alembic_version_locations():
+    class FakeConfig:
+        def __init__(self):
+            self.values: dict[str, str] = {}
+
+        def set_main_option(self, key: str, value: str):
+            self.values[key] = value
+
+    config = FakeConfig()
+    result = configure_alembic_version_locations(
+        config,
+        core_versions_path="/core/versions",
+        plugin_version_locations=("/ee/versions",),
+    )
+
+    assert result == ("/core/versions", "/ee/versions")
+    assert config.values["version_locations"] == "/core/versions:/ee/versions"
