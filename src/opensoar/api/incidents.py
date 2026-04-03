@@ -3,13 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
 from opensoar.auth.rbac import Permission, require_permission
+from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
@@ -41,7 +42,9 @@ async def _incident_response(
 
 @router.get("/suggestions")
 async def incident_suggestions(
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     """Basic correlation: group unlinked alerts by source_ip, return groups with 2+ alerts."""
     # Find alerts that have no incident link
@@ -53,6 +56,15 @@ async def incident_suggestions(
         .group_by(Alert.source_ip)
         .having(func.count(Alert.id) >= 2)
     )
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="alert",
+        action="incident_suggestions",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     result = await session.execute(query)
     groups = []
     for row in result.all():
@@ -62,6 +74,15 @@ async def incident_suggestions(
             .where(Alert.source_ip == row.source_ip)
             .where(Alert.id.notin_(linked_alert_ids))
             .order_by(Alert.created_at.desc())
+        )
+        alerts_query = await apply_tenant_access_query(
+            request.app,
+            query=alerts_query,
+            resource_type="alert",
+            action="incident_suggestions",
+            analyst=analyst,
+            request=request,
+            session=session,
         )
         alerts_result = await session.execute(alerts_query)
         alerts = alerts_result.scalars().all()
@@ -79,7 +100,9 @@ async def list_incidents(
     severity: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    request: Request = None,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     query = select(Incident).order_by(Incident.created_at.desc())
     count_query = select(func.count(Incident.id))
@@ -90,6 +113,25 @@ async def list_incidents(
     if severity:
         query = query.where(Incident.severity == severity)
         count_query = count_query.where(Incident.severity == severity)
+
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="incident",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    count_query = await apply_tenant_access_query(
+        request.app,
+        query=count_query,
+        resource_type="incident",
+        action="count",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     total = (await session.execute(count_query)).scalar() or 0
     result = await session.execute(query.offset(offset).limit(limit))
@@ -123,21 +165,7 @@ async def create_incident(
 @router.get("/{incident_id}", response_model=IncidentResponse)
 async def get_incident(
     incident_id: uuid.UUID,
-    session: AsyncSession = Depends(get_db),
-):
-    result = await session.execute(
-        select(Incident).where(Incident.id == incident_id)
-    )
-    incident = result.scalar_one_or_none()
-    if not incident:
-        raise HTTPException(status_code=404, detail="Incident not found")
-    return await _incident_response(session, incident)
-
-
-@router.patch("/{incident_id}", response_model=IncidentResponse)
-async def update_incident(
-    incident_id: uuid.UUID,
-    update: IncidentUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -147,6 +175,41 @@ async def update_incident(
     incident = result.scalar_one_or_none()
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    return await _incident_response(session, incident)
+
+
+@router.patch("/{incident_id}", response_model=IncidentResponse)
+async def update_incident(
+    incident_id: uuid.UUID,
+    update: IncidentUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    result = await session.execute(
+        select(Incident).where(Incident.id == incident_id)
+    )
+    incident = result.scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     update_data = update.model_dump(exclude_unset=True)
 
@@ -182,6 +245,7 @@ async def update_incident(
 async def link_alert(
     incident_id: uuid.UUID,
     body: LinkAlertRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -189,14 +253,34 @@ async def link_alert(
     result = await session.execute(
         select(Incident).where(Incident.id == incident_id)
     )
-    if not result.scalar_one_or_none():
+    incident = result.scalar_one_or_none()
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     # Verify alert exists
     alert_uuid = uuid.UUID(body.alert_id)
     result = await session.execute(select(Alert).where(Alert.id == alert_uuid))
-    if not result.scalar_one_or_none():
+    alert = result.scalar_one_or_none()
+    if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     # Check if already linked
     existing = await session.execute(
@@ -217,20 +301,41 @@ async def link_alert(
 @router.get("/{incident_id}/alerts")
 async def list_incident_alerts(
     incident_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     # Verify incident exists
     result = await session.execute(
         select(Incident).where(Incident.id == incident_id)
     )
-    if not result.scalar_one_or_none():
+    incident = result.scalar_one_or_none()
+    if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     query = (
         select(Alert)
         .join(IncidentAlert, IncidentAlert.alert_id == Alert.id)
         .where(IncidentAlert.incident_id == incident_id)
         .order_by(Alert.created_at.desc())
+    )
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="alert",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     result = await session.execute(query)
     alerts = result.scalars().all()
@@ -241,6 +346,7 @@ async def list_incident_alerts(
 async def unlink_alert(
     incident_id: uuid.UUID,
     alert_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -253,6 +359,15 @@ async def unlink_alert(
     link = result.scalar_one_or_none()
     if not link:
         raise HTTPException(status_code=404, detail="Link not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=link,
+        resource_type="incident_alert",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     await session.delete(link)
     await session.commit()

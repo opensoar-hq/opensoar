@@ -1,6 +1,9 @@
 """Tests for observable tracking and enrichment."""
 from __future__ import annotations
 
+from fastapi import HTTPException
+
+from opensoar.plugins import register_tenant_access_validator
 
 class TestObservablesCRUD:
     async def test_create_observable(self, client, registered_analyst):
@@ -103,3 +106,68 @@ class TestCorrelationEngine:
         assert resp.status_code == 200
         suggestions = resp.json()
         assert isinstance(suggestions, list)
+
+
+class TestObservableTenantHooks:
+    async def test_tenant_validator_filters_observable_list(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.models.observable import Observable
+
+        await client.post(
+            "/api/v1/observables",
+            json={"type": "ip", "value": "203.0.113.42", "source": "tenant-test"},
+            headers=registered_analyst["headers"],
+        )
+        await client.post(
+            "/api/v1/observables",
+            json={"type": "ip", "value": "198.51.100.1", "source": "tenant-test"},
+            headers=registered_analyst["headers"],
+        )
+
+        async def validator(**kwargs):
+            query = kwargs.get("query")
+            if query is not None and kwargs["resource_type"] == "observable":
+                return query.where(Observable.value == "203.0.113.42")
+            return None
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            resp = await client.get("/api/v1/observables", headers=registered_analyst["headers"])
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert resp.status_code == 200
+        assert {obs["value"] for obs in resp.json()["observables"]} == {"203.0.113.42"}
+
+    async def test_tenant_validator_blocks_observable_detail_and_enrichment(self, client, registered_analyst):
+        from opensoar.main import app
+
+        create = await client.post(
+            "/api/v1/observables",
+            json={"type": "ip", "value": "198.51.100.77", "source": "block-test"},
+            headers=registered_analyst["headers"],
+        )
+        obs_id = create.json()["id"]
+
+        async def validator(**kwargs):
+            resource = kwargs.get("resource")
+            if resource is not None and getattr(resource, "value", None) == "198.51.100.77":
+                raise HTTPException(status_code=403, detail="Tenant access denied")
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            detail = await client.get(f"/api/v1/observables/{obs_id}", headers=registered_analyst["headers"])
+            enrich = await client.post(
+                f"/api/v1/observables/{obs_id}/enrichments",
+                json={"source": "vt", "data": {"score": 5}},
+                headers=registered_analyst["headers"],
+            )
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert detail.status_code == 403
+        assert enrich.status_code == 403
