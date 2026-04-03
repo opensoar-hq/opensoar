@@ -27,6 +27,7 @@ from opensoar.config import settings
 from opensoar.core.registry import PlaybookRegistry
 from opensoar.core.triggers import TriggerEngine
 from opensoar.db import async_session
+from opensoar.plugins import initialize_plugin_state, load_optional_plugins
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -74,6 +75,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+initialize_plugin_state(app)
 
 # ── Middleware ──────────────────────────────────────────────
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
@@ -95,13 +97,7 @@ app.include_router(api_keys_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 
 # ── Plugin discovery ────────────────────────────────────────────────
-try:
-    from opensoar_ee import plugin as ee_plugin
-
-    ee_plugin(app)
-    logger.info("OpenSOAR EE plugin loaded")
-except ImportError:
-    pass
+load_optional_plugins(app)
 
 # ── Static UI serving (production Docker build) ─────────────────────
 STATIC_DIR = Path(__file__).resolve().parent.parent.parent / "static"

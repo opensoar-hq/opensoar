@@ -1,23 +1,40 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import { api, type Analyst } from '@/api'
+import { api, type Analyst, type AuthCapabilities } from '@/api'
 
 interface AuthContextType {
   analyst: Analyst | null
   isLoading: boolean
+  authCapabilities: AuthCapabilities
+  authCapabilitiesLoading: boolean
   login: (username: string, password: string) => Promise<void>
   register: (username: string, displayName: string, password: string) => Promise<void>
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
+const DEFAULT_AUTH_CAPABILITIES: AuthCapabilities = {
+  local_login_enabled: true,
+  local_registration_enabled: true,
+  providers: [],
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [initialToken] = useState(() => localStorage.getItem('opensoar_token'))
   const [analyst, setAnalyst] = useState<Analyst | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => Boolean(initialToken))
+  const [authCapabilities, setAuthCapabilities] = useState<AuthCapabilities>(DEFAULT_AUTH_CAPABILITIES)
+  const [authCapabilitiesLoading, setAuthCapabilitiesLoading] = useState(true)
 
   useEffect(() => {
-    const token = localStorage.getItem('opensoar_token')
-    if (token) {
+    api.auth.capabilities()
+      .then(setAuthCapabilities)
+      .catch(() => {
+        setAuthCapabilities(DEFAULT_AUTH_CAPABILITIES)
+      })
+      .finally(() => setAuthCapabilitiesLoading(false))
+
+    if (initialToken) {
       api.auth.me()
         .then(setAnalyst)
         .catch(() => {
@@ -25,10 +42,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAnalyst(null)
         })
         .finally(() => setIsLoading(false))
-    } else {
-      setIsLoading(false)
     }
-  }, [])
+  }, [initialToken])
 
   const login = useCallback(async (username: string, password: string) => {
     const res = await api.auth.login({ username, password })
@@ -48,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ analyst, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ analyst, isLoading, authCapabilities, authCapabilitiesLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   )
