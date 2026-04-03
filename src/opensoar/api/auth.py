@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import create_access_token, require_analyst
 from opensoar.models.analyst import Analyst
-from opensoar.plugins import get_auth_capabilities
+from opensoar.plugins import dispatch_audit_event, get_auth_capabilities
+from opensoar.schemas.audit import AuditEvent
 from opensoar.schemas.auth import AuthCapabilitiesResponse
 from opensoar.schemas.analyst import (
     AnalystCreate,
@@ -60,6 +61,19 @@ async def register(
     await session.commit()
     await session.refresh(analyst)
 
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="auth",
+            action="analyst.registered",
+            actor_id=analyst.id,
+            actor_username=analyst.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+            metadata_json={"role": analyst.role},
+        ),
+    )
+
     token = create_access_token(analyst.id, analyst.username)
     return TokenResponse(
         access_token=token,
@@ -85,6 +99,18 @@ async def login(
 
     if not analyst.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="auth",
+            action="analyst.logged_in",
+            actor_id=analyst.id,
+            actor_username=analyst.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+        ),
+    )
 
     token = create_access_token(analyst.id, analyst.username)
     return TokenResponse(
@@ -119,8 +145,9 @@ async def list_analysts(
 async def update_analyst(
     analyst_id: str,
     body: AnalystUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _admin: Analyst = Depends(_require_admin),
+    admin: Analyst = Depends(_require_admin),
 ):
     import uuid as _uuid
 
@@ -137,4 +164,17 @@ async def update_analyst(
 
     await session.commit()
     await session.refresh(analyst)
+
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="admin",
+            action="analyst.updated",
+            actor_id=admin.id,
+            actor_username=admin.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+            metadata_json={"updated_fields": sorted(update_data.keys())},
+        ),
+    )
     return AnalystResponse.model_validate(analyst)

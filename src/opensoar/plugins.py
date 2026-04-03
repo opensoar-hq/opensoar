@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import logging
 import os
 from collections.abc import Iterable
@@ -11,6 +12,8 @@ from types import ModuleType
 from typing import Any
 
 from fastapi import FastAPI
+
+from opensoar.schemas.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +26,8 @@ def initialize_plugin_state(app: FastAPI) -> None:
     """Initialize shared plugin state once so optional packages can extend it."""
     if not hasattr(app.state, "auth_providers"):
         app.state.auth_providers = []
+    if not hasattr(app.state, "audit_sinks"):
+        app.state.audit_sinks = []
     if not hasattr(app.state, "local_auth_enabled"):
         app.state.local_auth_enabled = True
     if not hasattr(app.state, "local_registration_enabled"):
@@ -156,6 +161,19 @@ def register_auth_provider(
         }
     )
     app.state.auth_providers = providers
+
+
+def register_audit_sink(app: FastAPI, sink: Any) -> None:
+    initialize_plugin_state(app)
+    app.state.audit_sinks.append(sink)
+
+
+async def dispatch_audit_event(app: FastAPI, event: AuditEvent) -> None:
+    initialize_plugin_state(app)
+    for sink in list(app.state.audit_sinks):
+        result = sink(event)
+        if inspect.isawaitable(result):
+            await result
 
 
 def get_auth_capabilities(app: FastAPI) -> dict[str, Any]:

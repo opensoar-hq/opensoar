@@ -1,6 +1,8 @@
 """Tests for webhook endpoint authentication via API key."""
 from __future__ import annotations
 
+from opensoar.plugins import register_audit_sink
+
 
 class TestWebhookAuth:
     """Webhook endpoints should optionally require an API key via X-API-Key header."""
@@ -141,3 +143,33 @@ class TestApiKeyManagement:
             headers={"X-API-Key": api_key},
         )
         assert resp.status_code == 401
+
+    async def test_api_key_actions_emit_audit_events(self, client, registered_admin):
+        from opensoar.main import app
+
+        seen = []
+
+        async def sink(event):
+            seen.append(event)
+
+        original_sinks = list(app.state.audit_sinks)
+        app.state.audit_sinks = []
+        register_audit_sink(app, sink)
+        try:
+            create = await client.post(
+                "/api/v1/api-keys",
+                json={"name": "audit-key"},
+                headers=registered_admin["headers"],
+            )
+            key_id = create.json()["id"]
+
+            revoke = await client.delete(
+                f"/api/v1/api-keys/{key_id}",
+                headers=registered_admin["headers"],
+            )
+        finally:
+            app.state.audit_sinks = original_sinks
+
+        assert create.status_code == 201
+        assert revoke.status_code == 200
+        assert [event.action for event in seen] == ["api_key.created", "api_key.revoked"]
