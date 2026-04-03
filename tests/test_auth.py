@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from opensoar.auth.jwt import create_access_token, decode_token
 from opensoar.config import settings
+from opensoar.plugins import register_audit_sink
 
 
 # ── JWT token tests ─────────────────────────────────────────
@@ -89,6 +90,35 @@ class TestRegister:
             app.state.local_registration_enabled = original_registration
 
         assert resp.status_code == 403
+
+    async def test_register_emits_audit_event(self, client):
+        from opensoar.main import app
+
+        seen = []
+
+        async def sink(event):
+            seen.append(event)
+
+        original_sinks = list(app.state.audit_sinks)
+        app.state.audit_sinks = []
+        register_audit_sink(app, sink)
+        try:
+            username = f"audit_{uuid.uuid4().hex[:8]}"
+            resp = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "username": username,
+                    "display_name": "Audit User",
+                    "password": "securepass123",
+                },
+            )
+        finally:
+            app.state.audit_sinks = original_sinks
+
+        assert resp.status_code == 200
+        assert len(seen) == 1
+        assert seen[0].action == "analyst.registered"
+        assert seen[0].category == "auth"
 
 
 # ── Login endpoint ──────────────────────────────────────────
@@ -171,6 +201,39 @@ class TestLogin:
             app.state.local_registration_enabled = original_registration
 
         assert resp.status_code == 403
+
+    async def test_login_emits_audit_event(self, client):
+        from opensoar.main import app
+
+        username = f"login_audit_{uuid.uuid4().hex[:8]}"
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": username,
+                "display_name": "Login Audit User",
+                "password": "mypassword",
+            },
+        )
+
+        seen = []
+
+        async def sink(event):
+            seen.append(event)
+
+        original_sinks = list(app.state.audit_sinks)
+        app.state.audit_sinks = []
+        register_audit_sink(app, sink)
+        try:
+            resp = await client.post(
+                "/api/v1/auth/login",
+                json={"username": username, "password": "mypassword"},
+            )
+        finally:
+            app.state.audit_sinks = original_sinks
+
+        assert resp.status_code == 200
+        assert len(seen) == 1
+        assert seen[0].action == "analyst.logged_in"
 
 
 # ── /me endpoint ────────────────────────────────────────────

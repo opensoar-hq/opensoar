@@ -6,11 +6,14 @@ from fastapi import FastAPI
 
 from opensoar.plugins import (
     configure_alembic_version_locations,
+    dispatch_audit_event,
     get_auth_capabilities,
     get_plugin_migration_config,
     import_optional_plugin_models,
     load_optional_plugins,
+    register_audit_sink,
 )
+from opensoar.schemas.audit import AuditEvent
 
 
 class FakeEntryPoint:
@@ -142,3 +145,19 @@ def test_configure_alembic_version_locations():
 
     assert result == ("/core/versions", "/ee/versions")
     assert config.values["version_locations"] == "/core/versions:/ee/versions"
+
+
+async def test_dispatch_audit_event_calls_registered_sink():
+    app = FastAPI()
+    seen: list[AuditEvent] = []
+
+    async def sink(event: AuditEvent):
+        seen.append(event)
+
+    register_audit_sink(app, sink)
+    event = AuditEvent(category="auth", action="analyst.logged_in", actor_username="alice")
+
+    await dispatch_audit_event(app, event)
+
+    assert len(seen) == 1
+    assert seen[0].action == "analyst.logged_in"
