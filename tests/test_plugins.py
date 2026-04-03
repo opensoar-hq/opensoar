@@ -7,10 +7,12 @@ from fastapi import FastAPI
 from opensoar.plugins import (
     configure_alembic_version_locations,
     dispatch_audit_event,
+    dispatch_api_key_validators,
     get_auth_capabilities,
     get_plugin_migration_config,
     import_optional_plugin_models,
     load_optional_plugins,
+    register_api_key_validator,
     register_audit_sink,
 )
 from opensoar.schemas.audit import AuditEvent
@@ -161,3 +163,21 @@ async def test_dispatch_audit_event_calls_registered_sink():
 
     assert len(seen) == 1
     assert seen[0].action == "analyst.logged_in"
+
+
+async def test_dispatch_api_key_validators_calls_registered_validator():
+    app = FastAPI()
+    seen = []
+
+    async def validator(*, api_key, request, required_scope):
+        seen.append((api_key, request, required_scope))
+
+    register_api_key_validator(app, validator)
+    await dispatch_api_key_validators(
+        app,
+        api_key="db-key",
+        request="request",
+        required_scope="webhooks:ingest",
+    )
+
+    assert seen == [("db-key", "request", "webhooks:ingest")]
