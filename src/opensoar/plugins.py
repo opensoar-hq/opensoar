@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import importlib
 import logging
+import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from importlib.metadata import entry_points
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 from fastapi import FastAPI
@@ -10,6 +15,8 @@ from fastapi import FastAPI
 logger = logging.getLogger(__name__)
 
 PLUGIN_GROUP = "opensoar.plugins"
+PLUGIN_MODEL_MODULES_ATTR = "PLUGIN_MODEL_MODULES"
+PLUGIN_VERSION_LOCATIONS_ATTR = "PLUGIN_VERSION_LOCATIONS"
 
 
 def initialize_plugin_state(app: FastAPI) -> None:
@@ -27,6 +34,75 @@ def iter_plugin_entry_points(group: str = PLUGIN_GROUP) -> Iterable[Any]:
     if hasattr(discovered, "select"):
         return discovered.select(group=group)
     return discovered.get(group, [])
+
+
+@dataclass(frozen=True)
+class PluginMigrationConfig:
+    model_modules: tuple[str, ...] = ()
+    version_locations: tuple[str, ...] = ()
+
+
+def _load_plugin_module(plugin_ep: Any) -> ModuleType:
+    plugin = plugin_ep.load()
+    module_name = getattr(plugin_ep, "module", None) or getattr(plugin, "__module__", None)
+    if not module_name:
+        raise ValueError(f"Unable to determine plugin module for entry point {plugin_ep.name}")
+    return importlib.import_module(module_name)
+
+
+def _normalize_version_location(module: ModuleType, location: str) -> str:
+    path = Path(location)
+    if path.is_absolute():
+        return str(path)
+
+    module_file = getattr(module, "__file__", None)
+    if not module_file:
+        raise ValueError(
+            f"Plugin module {module.__name__} must define __file__ for relative version paths"
+        )
+    return str((Path(module_file).resolve().parent / path).resolve())
+
+
+def get_plugin_migration_config(group: str = PLUGIN_GROUP) -> PluginMigrationConfig:
+    model_modules: list[str] = []
+    version_locations: list[str] = []
+
+    for plugin_ep in iter_plugin_entry_points(group):
+        module = _load_plugin_module(plugin_ep)
+
+        for model_module in getattr(module, PLUGIN_MODEL_MODULES_ATTR, ()):
+            if model_module not in model_modules:
+                model_modules.append(model_module)
+
+        for location in getattr(module, PLUGIN_VERSION_LOCATIONS_ATTR, ()):
+            normalized = _normalize_version_location(module, location)
+            if normalized not in version_locations:
+                version_locations.append(normalized)
+
+    return PluginMigrationConfig(
+        model_modules=tuple(model_modules),
+        version_locations=tuple(version_locations),
+    )
+
+
+def import_optional_plugin_models(group: str = PLUGIN_GROUP) -> tuple[str, ...]:
+    config = get_plugin_migration_config(group)
+    imported: list[str] = []
+    for model_module in config.model_modules:
+        importlib.import_module(model_module)
+        imported.append(model_module)
+    return tuple(imported)
+
+
+def configure_alembic_version_locations(
+    alembic_config: Any,
+    *,
+    core_versions_path: str,
+    plugin_version_locations: Iterable[str],
+) -> tuple[str, ...]:
+    version_locations = [core_versions_path, *plugin_version_locations]
+    alembic_config.set_main_option("version_locations", os.pathsep.join(version_locations))
+    return tuple(version_locations)
 
 
 def load_optional_plugins(app: FastAPI, group: str = PLUGIN_GROUP) -> list[str]:
