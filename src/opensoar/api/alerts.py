@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +14,7 @@ from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.playbook_run import PlaybookRun
 from opensoar.auth.jwt import require_analyst
+from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.schemas.alert import (
     AlertDetailResponse,
     AlertList,
@@ -38,7 +39,9 @@ async def list_alerts(
     determination: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    request: Request = None,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     query = select(Alert).order_by(Alert.created_at.desc())
     count_query = select(func.count(Alert.id))
@@ -59,6 +62,25 @@ async def list_alerts(
         query = query.where(Alert.determination == determination)
         count_query = count_query.where(Alert.determination == determination)
 
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="alert",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    count_query = await apply_tenant_access_query(
+        request.app,
+        query=count_query,
+        resource_type="alert",
+        action="count",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
     total = (await session.execute(count_query)).scalar() or 0
     result = await session.execute(query.offset(offset).limit(limit))
     alerts = result.scalars().all()
@@ -72,12 +94,23 @@ async def list_alerts(
 @router.get("/{alert_id}", response_model=AlertDetailResponse)
 async def get_alert(
     alert_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     result = await session.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     return AlertDetailResponse.model_validate(alert)
 
 
@@ -103,6 +136,7 @@ async def get_alert_runs(
 async def update_alert(
     alert_id: uuid.UUID,
     update: AlertUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -110,6 +144,15 @@ async def update_alert(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     # Validate determination value
     if update.determination and update.determination not in VALID_DETERMINATIONS:
@@ -207,6 +250,7 @@ async def update_alert(
 @router.post("/{alert_id}/claim", response_model=AlertResponse)
 async def claim_alert(
     alert_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -215,6 +259,15 @@ async def claim_alert(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="claim",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     if analyst:
         alert.assigned_to = analyst.id

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import uuid
 
+from fastapi import HTTPException
+
 
 
 class TestListAlerts:
@@ -31,6 +33,39 @@ class TestListAlerts:
         assert resp.status_code == 200
         assert len(resp.json()["alerts"]) <= 1
 
+    async def test_tenant_validator_filters_alert_list(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.models.alert import Alert
+        from opensoar.plugins import register_tenant_access_validator
+
+        alert_a = await client.post(
+            "/api/v1/webhooks/alerts",
+            json={"rule_name": "Scoped A", "severity": "low", "partner": "acme-corp"},
+        )
+        alert_b = await client.post(
+            "/api/v1/webhooks/alerts",
+            json={"rule_name": "Scoped B", "severity": "low", "partner": "globex"},
+        )
+        assert alert_a.status_code == 200
+        assert alert_b.status_code == 200
+
+        async def validator(**kwargs):
+            query = kwargs.get("query")
+            if query is not None and kwargs["resource_type"] == "alert":
+                return query.where(Alert.partner == "acme-corp")
+            return None
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            resp = await client.get("/api/v1/alerts", headers=registered_analyst["headers"])
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert resp.status_code == 200
+        assert all(alert["partner"] == "acme-corp" for alert in resp.json()["alerts"])
+
 
 class TestGetAlert:
     async def test_get_existing_alert(self, client, sample_alert_via_api):
@@ -44,6 +79,31 @@ class TestGetAlert:
     async def test_get_nonexistent_alert(self, client):
         resp = await client.get(f"/api/v1/alerts/{uuid.uuid4()}")
         assert resp.status_code == 404
+
+    async def test_tenant_validator_blocks_alert_detail(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.plugins import register_tenant_access_validator
+
+        resp = await client.post(
+            "/api/v1/webhooks/alerts",
+            json={"rule_name": "Blocked Detail", "severity": "low", "partner": "globex"},
+        )
+        alert_id = resp.json()["alert_id"]
+
+        async def validator(**kwargs):
+            resource = kwargs.get("resource")
+            if resource is not None and getattr(resource, "partner", None) == "globex":
+                raise HTTPException(status_code=403, detail="Tenant access denied")
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            blocked = await client.get(f"/api/v1/alerts/{alert_id}", headers=registered_analyst["headers"])
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert blocked.status_code == 403
 
 
 class TestUpdateAlert:
@@ -107,6 +167,35 @@ class TestUpdateAlert:
             headers=registered_analyst["headers"],
         )
         assert resp.status_code == 404
+
+    async def test_tenant_validator_blocks_alert_update(self, client, registered_analyst):
+        from opensoar.main import app
+        from opensoar.plugins import register_tenant_access_validator
+
+        resp = await client.post(
+            "/api/v1/webhooks/alerts",
+            json={"rule_name": "Blocked Update", "severity": "low", "partner": "globex"},
+        )
+        alert_id = resp.json()["alert_id"]
+
+        async def validator(**kwargs):
+            resource = kwargs.get("resource")
+            if resource is not None and getattr(resource, "partner", None) == "globex":
+                raise HTTPException(status_code=403, detail="Tenant access denied")
+
+        original_validators = list(app.state.tenant_access_validators)
+        app.state.tenant_access_validators = []
+        register_tenant_access_validator(app, validator)
+        try:
+            blocked = await client.patch(
+                f"/api/v1/alerts/{alert_id}",
+                json={"severity": "critical"},
+                headers=registered_analyst["headers"],
+            )
+        finally:
+            app.state.tenant_access_validators = original_validators
+
+        assert blocked.status_code == 403
 
 
 class TestClaimAlert:

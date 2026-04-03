@@ -30,6 +30,8 @@ def initialize_plugin_state(app: FastAPI) -> None:
         app.state.audit_sinks = []
     if not hasattr(app.state, "api_key_validators"):
         app.state.api_key_validators = []
+    if not hasattr(app.state, "tenant_access_validators"):
+        app.state.tenant_access_validators = []
     if not hasattr(app.state, "local_auth_enabled"):
         app.state.local_auth_enabled = True
     if not hasattr(app.state, "local_registration_enabled"):
@@ -175,6 +177,11 @@ def register_api_key_validator(app: FastAPI, validator: Any) -> None:
     app.state.api_key_validators.append(validator)
 
 
+def register_tenant_access_validator(app: FastAPI, validator: Any) -> None:
+    initialize_plugin_state(app)
+    app.state.tenant_access_validators.append(validator)
+
+
 async def dispatch_audit_event(app: FastAPI, event: AuditEvent) -> None:
     initialize_plugin_state(app)
     for sink in list(app.state.audit_sinks):
@@ -193,6 +200,57 @@ async def dispatch_api_key_validators(
     initialize_plugin_state(app)
     for validator in list(app.state.api_key_validators):
         result = validator(api_key=api_key, request=request, required_scope=required_scope)
+        if inspect.isawaitable(result):
+            await result
+
+
+async def apply_tenant_access_query(
+    app: FastAPI,
+    *,
+    query: Any,
+    resource_type: str,
+    action: str,
+    analyst: Any,
+    request: Any,
+    session: Any,
+):
+    initialize_plugin_state(app)
+    for validator in list(app.state.tenant_access_validators):
+        result = validator(
+            query=query,
+            resource_type=resource_type,
+            action=action,
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
+        if inspect.isawaitable(result):
+            result = await result
+        if result is not None:
+            query = result
+    return query
+
+
+async def enforce_tenant_access(
+    app: FastAPI,
+    *,
+    resource: Any,
+    resource_type: str,
+    action: str,
+    analyst: Any,
+    request: Any,
+    session: Any,
+) -> None:
+    initialize_plugin_state(app)
+    for validator in list(app.state.tenant_access_validators):
+        result = validator(
+            resource=resource,
+            resource_type=resource_type,
+            action=action,
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
         if inspect.isawaitable(result):
             await result
 
