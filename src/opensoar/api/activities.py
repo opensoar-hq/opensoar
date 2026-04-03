@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
-from opensoar.auth.jwt import require_analyst
+from opensoar.auth.jwt import get_current_analyst, require_analyst
+from opensoar.plugins import enforce_tenant_access
 from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
@@ -21,8 +22,26 @@ async def list_alert_activities(
     alert_id: uuid.UUID,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
+    request: Request = None,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
+    alert = (
+        await session.execute(select(Alert).where(Alert.id == alert_id))
+    ).scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
     query = (
         select(Activity)
         .where(Activity.alert_id == alert_id)

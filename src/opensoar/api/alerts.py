@@ -117,8 +117,23 @@ async def get_alert(
 @router.get("/{alert_id}/runs", response_model=PlaybookRunList)
 async def get_alert_runs(
     alert_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
+    alert = (await session.execute(select(Alert).where(Alert.id == alert_id))).scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
     query = select(PlaybookRun).where(PlaybookRun.alert_id == alert_id).order_by(
         PlaybookRun.created_at.desc()
     )
