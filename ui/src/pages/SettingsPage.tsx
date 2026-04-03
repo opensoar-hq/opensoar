@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Settings, Plug, Key, Users, Plus, Trash2, Shield,
-  CheckCircle, XCircle, Copy, Heart, Loader2,
+  CheckCircle, XCircle, Copy, Heart, Loader2, CalendarDays, Play,
 } from 'lucide-react'
 import { api, type Integration } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -21,7 +21,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 const ease = [0.25, 0.1, 0.25, 1] as [number, number, number, number]
 
-type Tab = 'integrations' | 'api-keys' | 'analysts'
+type Tab = 'integrations' | 'api-keys' | 'analysts' | 'enterprise'
 
 function IntegrationsTab() {
   const queryClient = useQueryClient()
@@ -398,6 +398,343 @@ function AnalystsTab() {
   )
 }
 
+function EnterpriseTab() {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [showScopeDialog, setShowScopeDialog] = useState(false)
+  const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null)
+  const [scopeText, setScopeText] = useState('')
+  const [scopeTenantId, setScopeTenantId] = useState('')
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false)
+  const [scheduleForm, setScheduleForm] = useState({
+    report_type: 'sla_compliance',
+    format: 'pdf',
+    cadence: 'daily',
+    destination_email: '',
+    tenant_id: '',
+    config: '{}',
+  })
+
+  const { data: keys, isLoading: keysLoading } = useQuery({
+    queryKey: ['api-keys'],
+    queryFn: api.apiKeys.list,
+  })
+
+  const { data: tenants, isLoading: tenantsLoading } = useQuery({
+    queryKey: ['ee-tenants'],
+    queryFn: api.tenants.list,
+    retry: false,
+  })
+
+  const schedulesQuery = useQuery({
+    queryKey: ['ee-report-schedules'],
+    queryFn: api.reportSchedules.list,
+    retry: false,
+  })
+
+  const scopeQuery = useQuery({
+    queryKey: ['ee-api-key-scope', selectedKeyId],
+    queryFn: () => api.apiKeyScopes.get(selectedKeyId!),
+    enabled: showScopeDialog && !!selectedKeyId,
+    retry: false,
+  })
+
+  const updateScopesMutation = useMutation({
+    mutationFn: () => api.apiKeyScopes.update(selectedKeyId!, {
+      scopes: scopeText.split(',').map((s) => s.trim()).filter(Boolean),
+      tenant_id: scopeTenantId || null,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-api-key-scope', selectedKeyId] })
+      toast.success('Key scopes updated')
+      setShowScopeDialog(false)
+      setSelectedKeyId(null)
+      setScopeText('')
+      setScopeTenantId('')
+    },
+    onError: () => {
+      toast.error('Failed to update key scopes')
+    },
+  })
+
+  const createScheduleMutation = useMutation({
+    mutationFn: () => api.reportSchedules.create({
+      report_type: scheduleForm.report_type,
+      format: scheduleForm.format,
+      cadence: scheduleForm.cadence,
+      destination_email: scheduleForm.destination_email || undefined,
+      tenant_id: scheduleForm.tenant_id || null,
+      config: (() => {
+        try { return JSON.parse(scheduleForm.config) } catch { return {} }
+      })(),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-report-schedules'] })
+      toast.success('Report schedule created')
+      setShowScheduleDialog(false)
+      setScheduleForm({
+        report_type: 'sla_compliance',
+        format: 'pdf',
+        cadence: 'daily',
+        destination_email: '',
+        tenant_id: '',
+        config: '{}',
+      })
+    },
+    onError: () => {
+      toast.error('Failed to create report schedule')
+    },
+  })
+
+  const runScheduleMutation = useMutation({
+    mutationFn: (id: string) => api.reportSchedules.run(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-report-schedules'] })
+      toast.success('Report schedule executed')
+    },
+    onError: () => {
+      toast.error('Failed to execute report schedule')
+    },
+  })
+
+  const deleteScheduleMutation = useMutation({
+    mutationFn: (id: string) => api.reportSchedules.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-report-schedules'] })
+      toast.success('Report schedule deleted')
+    },
+    onError: () => {
+      toast.error('Failed to delete report schedule')
+    },
+  })
+
+  const enterpriseUnavailable = schedulesQuery.isError && tenants !== undefined
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">Scoped API Keys</h3>
+        </div>
+        {keysLoading ? (
+          <CardSkeleton lines={2} />
+        ) : keys && keys.length > 0 ? (
+          <Card>
+            {keys.map((k) => (
+              <div key={k.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0">
+                <Key size={14} className="text-muted shrink-0" />
+                <div className="flex-1">
+                  <div className="text-sm text-heading">{k.name}</div>
+                  <div className="text-[11px] text-muted font-mono">{k.prefix}...</div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={async () => {
+                    setSelectedKeyId(k.id)
+                    setShowScopeDialog(true)
+                  }}
+                >
+                  Manage Scope
+                </Button>
+              </div>
+            ))}
+          </Card>
+        ) : (
+          <EmptyState icon={<Key size={28} />} title="No API keys" description="Create an API key before assigning scopes" />
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">Report Schedules</h3>
+          <Button size="sm" onClick={() => setShowScheduleDialog(true)}>
+            <Plus size={14} /> Add Schedule
+          </Button>
+        </div>
+
+        {enterpriseUnavailable ? (
+          <EmptyState
+            icon={<CalendarDays size={28} />}
+            title="Enterprise reporting unavailable"
+            description="The report schedule endpoints are not available in this deployment."
+          />
+        ) : schedulesQuery.isLoading || tenantsLoading ? (
+          <CardSkeleton lines={2} />
+        ) : schedulesQuery.data && schedulesQuery.data.length > 0 ? (
+          <Card>
+            {schedulesQuery.data.map((schedule) => (
+              <div key={schedule.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0">
+                <CalendarDays size={14} className="text-muted shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-heading">{schedule.report_type} · {schedule.format}</div>
+                  <div className="text-[11px] text-muted">
+                    {schedule.cadence}
+                    {schedule.destination_email ? ` · ${schedule.destination_email}` : ''}
+                    {schedule.last_run_status ? ` · last: ${schedule.last_run_status}` : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => runScheduleMutation.mutate(schedule.id)}
+                  className="p-1.5 rounded hover:bg-surface text-muted hover:text-heading bg-transparent border-none cursor-pointer disabled:opacity-50"
+                  title="Run now"
+                >
+                  {runScheduleMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
+                </button>
+                <button
+                  onClick={() => deleteScheduleMutation.mutate(schedule.id)}
+                  className="p-1.5 rounded hover:bg-danger/10 text-muted hover:text-danger bg-transparent border-none cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </Card>
+        ) : (
+          <EmptyState icon={<CalendarDays size={28} />} title="No schedules" description="Create a report schedule to automate exports" />
+        )}
+      </div>
+
+      <Dialog open={showScopeDialog} onClose={() => setShowScopeDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowScopeDialog(false)}>
+            <DialogTitle>Manage Key Scope</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            {scopeQuery.isError ? (
+              <div className="text-sm text-muted">Scoped key management is not available in this deployment.</div>
+            ) : (
+              <>
+                <div>
+                  <Label>Scopes</Label>
+                  <Input
+                    value={scopeText || (scopeQuery.data?.scopes.join(', ') ?? '')}
+                    onChange={(e) => setScopeText(e.target.value)}
+                    placeholder="webhooks:ingest, webhooks:ingest:elastic"
+                  />
+                </div>
+                <div>
+                  <Label>Tenant</Label>
+                  <Select
+                    value={scopeTenantId || scopeQuery.data?.tenant_id || ''}
+                    onChange={(v) => setScopeTenantId(v)}
+                    options={[
+                      { value: '', label: 'Unowned / global' },
+                      ...((tenants || []).map((tenant) => ({
+                        value: tenant.id,
+                        label: tenant.name,
+                      }))),
+                    ]}
+                    className="w-full"
+                  />
+                </div>
+              </>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowScopeDialog(false)}>Close</Button>
+            {!scopeQuery.isError && (
+              <Button size="sm" variant="primary" onClick={() => updateScopesMutation.mutate()}>
+                Save
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showScheduleDialog} onClose={() => setShowScheduleDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowScheduleDialog(false)}>
+            <DialogTitle>Create Report Schedule</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Report Type</Label>
+                <Select
+                  value={scheduleForm.report_type}
+                  onChange={(v) => setScheduleForm({ ...scheduleForm, report_type: v })}
+                  options={[
+                    { value: 'audit_log', label: 'Audit Log' },
+                    { value: 'sla_compliance', label: 'SLA Compliance' },
+                  ]}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label>Format</Label>
+                <Select
+                  value={scheduleForm.format}
+                  onChange={(v) => setScheduleForm({ ...scheduleForm, format: v })}
+                  options={[
+                    { value: 'pdf', label: 'PDF' },
+                    { value: 'json', label: 'JSON' },
+                    { value: 'csv', label: 'CSV' },
+                  ]}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Cadence</Label>
+                <Select
+                  value={scheduleForm.cadence}
+                  onChange={(v) => setScheduleForm({ ...scheduleForm, cadence: v })}
+                  options={[
+                    { value: 'manual', label: 'Manual' },
+                    { value: 'daily', label: 'Daily' },
+                    { value: 'weekly', label: 'Weekly' },
+                  ]}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Label>Tenant</Label>
+                <Select
+                  value={scheduleForm.tenant_id}
+                  onChange={(v) => setScheduleForm({ ...scheduleForm, tenant_id: v })}
+                  options={[
+                    { value: '', label: 'Global / none' },
+                    ...((tenants || []).map((tenant) => ({
+                      value: tenant.id,
+                      label: tenant.name,
+                    }))),
+                  ]}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Destination Email</Label>
+              <Input
+                value={scheduleForm.destination_email}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, destination_email: e.target.value })}
+                placeholder="soc@example.com"
+              />
+            </div>
+            <div>
+              <Label>Config (JSON)</Label>
+              <Textarea
+                value={scheduleForm.config}
+                onChange={(e) => setScheduleForm({ ...scheduleForm, config: e.target.value })}
+                rows={3}
+                className="font-mono"
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowScheduleDialog(false)}>Cancel</Button>
+            <Button size="sm" variant="primary" onClick={() => createScheduleMutation.mutate()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const { analyst } = useAuth()
   const [tab, setTab] = useState<Tab>('integrations')
@@ -424,6 +761,7 @@ export function SettingsPage() {
           { value: 'integrations', label: 'Integrations', icon: <Plug size={14} /> },
           { value: 'api-keys', label: 'API Keys', icon: <Key size={14} /> },
           { value: 'analysts', label: 'Analysts', icon: <Users size={14} /> },
+          { value: 'enterprise', label: 'Enterprise', icon: <CalendarDays size={14} /> },
         ]}
         className="mb-6"
       />
@@ -439,6 +777,7 @@ export function SettingsPage() {
           {tab === 'integrations' && <IntegrationsTab />}
           {tab === 'api-keys' && <ApiKeysTab />}
           {tab === 'analysts' && <AnalystsTab />}
+          {tab === 'enterprise' && <EnterpriseTab />}
         </motion.div>
       </AnimatePresence>
     </PageTransition>
