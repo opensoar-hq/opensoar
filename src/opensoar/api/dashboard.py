@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from opensoar.auth.jwt import get_current_analyst
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.playbook_run import PlaybookRun
+from opensoar.plugins import apply_tenant_access_query
 from opensoar.schemas.alert import AlertResponse
 from opensoar.schemas.playbook_run import PlaybookRunResponse
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 @router.get("/stats")
 async def dashboard_stats(
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):
@@ -28,11 +30,29 @@ async def dashboard_stats(
 
     # Alerts by severity
     sev_q = select(Alert.severity, func.count(Alert.id)).group_by(Alert.severity)
+    sev_q = await apply_tenant_access_query(
+        request.app,
+        query=sev_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     sev_result = await session.execute(sev_q)
     alerts_by_severity = dict(sev_result.all())
 
     # Alerts by status
     status_q = select(Alert.status, func.count(Alert.id)).group_by(Alert.status)
+    status_q = await apply_tenant_access_query(
+        request.app,
+        query=status_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     status_result = await session.execute(status_q)
     alerts_by_status = dict(status_result.all())
 
@@ -42,11 +62,29 @@ async def dashboard_stats(
         .where(Alert.partner.is_not(None))
         .group_by(Alert.partner)
     )
+    partner_q = await apply_tenant_access_query(
+        request.app,
+        query=partner_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     partner_result = await session.execute(partner_q)
     alerts_by_partner = dict(partner_result.all())
 
     # Alerts by determination
     det_q = select(Alert.determination, func.count(Alert.id)).group_by(Alert.determination)
+    det_q = await apply_tenant_access_query(
+        request.app,
+        query=det_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     det_result = await session.execute(det_q)
     alerts_by_determination = dict(det_result.all())
 
@@ -65,6 +103,15 @@ async def dashboard_stats(
         )
         .group_by(Alert.partner)
     )
+    mttr_by_partner_q = await apply_tenant_access_query(
+        request.app,
+        query=mttr_by_partner_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     mttr_partner_result = await session.execute(mttr_by_partner_q)
     mttr_by_partner = {row[0]: row[1] for row in mttr_partner_result.all()}
 
@@ -76,6 +123,15 @@ async def dashboard_stats(
             Alert.status.in_(["new", "in_progress"]),
         )
         .group_by(Alert.partner)
+    )
+    open_by_partner_q = await apply_tenant_access_query(
+        request.app,
+        query=open_by_partner_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     open_partner_result = await session.execute(open_by_partner_q)
     open_by_partner = dict(open_partner_result.all())
@@ -92,6 +148,15 @@ async def dashboard_stats(
     alerts_today_q = select(func.count(Alert.id)).where(
         Alert.created_at >= today_start
     )
+    alerts_today_q = await apply_tenant_access_query(
+        request.app,
+        query=alerts_today_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     alerts_today = (await session.execute(alerts_today_q)).scalar() or 0
 
     # MTTR — mean time to resolve for alerts resolved in last 7 days
@@ -102,6 +167,15 @@ async def dashboard_stats(
     ).where(
         Alert.resolved_at.is_not(None),
         Alert.resolved_at >= week_ago,
+    )
+    mttr_q = await apply_tenant_access_query(
+        request.app,
+        query=mttr_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     mttr_seconds = (await session.execute(mttr_q)).scalar()
 
@@ -125,6 +199,15 @@ async def dashboard_stats(
         .order_by(severity_order, Alert.created_at.asc())
         .limit(10)
     )
+    priority_q = await apply_tenant_access_query(
+        request.app,
+        query=priority_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     priority_alerts = (await session.execute(priority_q)).scalars().all()
 
     # My assignments (if authenticated)
@@ -139,6 +222,15 @@ async def dashboard_stats(
             .order_by(severity_order, Alert.created_at.asc())
             .limit(10)
         )
+        my_q = await apply_tenant_access_query(
+            request.app,
+            query=my_q,
+            resource_type="alert",
+            action="dashboard_stats",
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
         my_result = (await session.execute(my_q)).scalars().all()
         my_alerts = [AlertResponse.model_validate(a) for a in my_result]
 
@@ -150,6 +242,15 @@ async def dashboard_stats(
     unassigned_q = select(func.count(Alert.id)).where(
         Alert.status.in_(["new", "in_progress"]),
         Alert.assigned_to.is_(None),
+    )
+    unassigned_q = await apply_tenant_access_query(
+        request.app,
+        query=unassigned_q,
+        resource_type="alert",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     unassigned_count = (await session.execute(unassigned_q)).scalar() or 0
 
