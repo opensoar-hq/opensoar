@@ -91,7 +91,7 @@ function SidebarContent() {
 
       {/* Bottom section — settings + user */}
       <div className="border-t border-border pt-3 mt-3 flex flex-col gap-0.5">
-        {analyst?.role === 'admin' && (
+        {(analyst?.role === 'admin' || analyst?.role === 'tenant_admin') && (
           <SidebarLink
             to="/settings"
             icon={<Settings size={18} />}

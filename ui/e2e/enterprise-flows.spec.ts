@@ -183,3 +183,25 @@ test('assigns ownership to a global integration and shows migration queue', asyn
   await page.getByRole('button', { name: 'Enterprise' }).click()
   await expect(page.getByRole('heading', { name: 'Global Resource Migration' })).toBeVisible()
 })
+
+test('tenant admin only sees enterprise settings tab', async ({ page }) => {
+  await mockEnterpriseApi(page, {
+    analyst: {
+      id: 'tenant-admin-1',
+      username: 'tenantadmin',
+      display_name: 'Tenant Admin',
+      email: 'tenantadmin@example.com',
+      is_active: true,
+      role: 'tenant_admin',
+      created_at: '2026-04-04T00:00:00.000Z',
+    },
+  })
+  await page.goto('/settings')
+
+  await expect(page.getByRole('button', { name: 'Enterprise' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Integrations' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'API Keys' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Analysts' })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: 'Tenants' })).toBeVisible()
+  await expect(page.getByText('Provider management restricted')).toBeVisible()
+})

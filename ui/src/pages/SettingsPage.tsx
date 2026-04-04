@@ -447,6 +447,8 @@ function AnalystsTab() {
 function EnterpriseTab() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { analyst } = useAuth()
+  const isGlobalAdmin = analyst?.role === 'admin'
   const { data: analysts } = useQuery({
     queryKey: ['analysts'],
     queryFn: api.analysts.list,
@@ -872,7 +874,13 @@ function EnterpriseTab() {
             <Plus size={14} /> Add Provider
           </Button>
         </div>
-        {providersQuery.isError ? (
+        {!isGlobalAdmin ? (
+          <EmptyState
+            icon={<Shield size={28} />}
+            title="Provider management restricted"
+            description="OIDC provider management remains a global admin-only workflow."
+          />
+        ) : providersQuery.isError ? (
           <EmptyState
             icon={<Shield size={28} />}
             title="OIDC provider management unavailable"
@@ -933,7 +941,13 @@ function EnterpriseTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-heading m-0">Scoped API Keys</h3>
         </div>
-        {keysLoading ? (
+        {!isGlobalAdmin ? (
+          <EmptyState
+            icon={<Key size={28} />}
+            title="Scoped key management restricted"
+            description="Tenant admins do not manage global API keys from this screen."
+          />
+        ) : keysLoading ? (
           <CardSkeleton lines={2} />
         ) : keys && keys.length > 0 ? (
           <Card>
@@ -1016,7 +1030,13 @@ function EnterpriseTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-heading m-0">Data Retention</h3>
         </div>
-        {retentionQuery.isError ? (
+        {!isGlobalAdmin ? (
+          <EmptyState
+            icon={<Shield size={28} />}
+            title="Retention controls restricted"
+            description="Data retention remains a global admin-only workflow."
+          />
+        ) : retentionQuery.isError ? (
           <EmptyState
             icon={<Shield size={28} />}
             title="Retention management unavailable"
@@ -1103,7 +1123,13 @@ function EnterpriseTab() {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-heading m-0">Global Resource Migration</h3>
         </div>
-        {globalResourcesQuery.isError ? (
+        {!isGlobalAdmin ? (
+          <EmptyState
+            icon={<Plug size={28} />}
+            title="Migration inventory restricted"
+            description="Legacy global-resource migration remains a global admin-only workflow."
+          />
+        ) : globalResourcesQuery.isError ? (
           <EmptyState
             icon={<Plug size={28} />}
             title="Global resource inventory unavailable"
@@ -1456,9 +1482,9 @@ function EnterpriseTab() {
 
 export function SettingsPage() {
   const { analyst } = useAuth()
-  const [tab, setTab] = useState<Tab>('integrations')
+  const [tab, setTab] = useState<Tab>(analyst?.role === 'tenant_admin' ? 'enterprise' : 'integrations')
 
-  if (analyst?.role !== 'admin') {
+  if (analyst?.role !== 'admin' && analyst?.role !== 'tenant_admin') {
     return (
       <PageTransition>
         <div className="text-center py-20">
@@ -1476,12 +1502,14 @@ export function SettingsPage() {
       <Tabs
         value={tab}
         onChange={(v) => setTab(v as Tab)}
-        tabs={[
-          { value: 'integrations', label: 'Integrations', icon: <Plug size={14} /> },
-          { value: 'api-keys', label: 'API Keys', icon: <Key size={14} /> },
-          { value: 'analysts', label: 'Analysts', icon: <Users size={14} /> },
-          { value: 'enterprise', label: 'Enterprise', icon: <CalendarDays size={14} /> },
-        ]}
+        tabs={analyst?.role === 'tenant_admin'
+          ? [{ value: 'enterprise', label: 'Enterprise', icon: <CalendarDays size={14} /> }]
+          : [
+              { value: 'integrations', label: 'Integrations', icon: <Plug size={14} /> },
+              { value: 'api-keys', label: 'API Keys', icon: <Key size={14} /> },
+              { value: 'analysts', label: 'Analysts', icon: <Users size={14} /> },
+              { value: 'enterprise', label: 'Enterprise', icon: <CalendarDays size={14} /> },
+            ]}
         className="mb-6"
       />
 
