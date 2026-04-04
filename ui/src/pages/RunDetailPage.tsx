@@ -20,7 +20,7 @@ export function RunDetailPage() {
 
   const { data: playbooks } = useQuery({
     queryKey: ['playbooks'],
-    queryFn: api.playbooks.list,
+    queryFn: () => api.playbooks.list(),
   })
 
   if (isLoading) {

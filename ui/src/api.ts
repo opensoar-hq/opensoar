@@ -392,7 +392,7 @@ export const api = {
   playbooks: {
     list: (tenantId?: string) => fetchJSON<Playbook[]>(`/playbooks${tenantId ? `?tenant_id=${tenantId}` : ''}`),
     get: (id: string) => fetchJSON<Playbook>(`/playbooks/${id}`),
-    update: (id: string, data: { enabled?: boolean }) =>
+    update: (id: string, data: { enabled?: boolean; partner?: string | null }) =>
       patchJSON<Playbook>(`/playbooks/${id}`, data),
     run: (id: string, data?: { alert_id?: string }) =>
       postJSON<{ message: string; celery_task_id: string }>(`/playbooks/${id}/run`, data || {}),
@@ -421,9 +421,9 @@ export const api = {
   integrations: {
     list: () => fetchJSON<Integration[]>('/integrations'),
     types: () => fetchJSON<{ type: string; display_name: string; description: string }[]>('/integrations/types'),
-    create: (data: { integration_type: string; name: string; config: Record<string, unknown>; enabled?: boolean }) =>
+    create: (data: { integration_type: string; name: string; partner?: string | null; config: Record<string, unknown>; enabled?: boolean }) =>
       postJSON<Integration>('/integrations', data),
-    update: (id: string, data: { name?: string; config?: Record<string, unknown>; enabled?: boolean }) =>
+    update: (id: string, data: { name?: string; partner?: string | null; config?: Record<string, unknown>; enabled?: boolean }) =>
       patchJSON<Integration>(`/integrations/${id}`, data),
     delete: (id: string) => deleteJSON(`/integrations/${id}`),
     healthCheck: (id: string) => postJSON<{ healthy: boolean; message: string; details: Record<string, unknown> | null }>(`/integrations/${id}/health`, {}),

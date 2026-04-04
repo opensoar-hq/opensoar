@@ -150,7 +150,7 @@ export function PlaybooksListPage() {
   const { analyst } = useAuth()
   const { data: playbooks, isLoading } = useQuery({
     queryKey: ['playbooks'],
-    queryFn: api.playbooks.list,
+    queryFn: () => api.playbooks.list(),
   })
   const { data: tenants = [] } = useQuery({
     queryKey: ['playbook-owner-tenants'],
