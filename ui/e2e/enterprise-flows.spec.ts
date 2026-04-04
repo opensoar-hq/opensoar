@@ -162,3 +162,24 @@ test('applies workspace selection to incidents and runs pages', async ({ page })
   await expect(page.getByRole('button', { name: /Northwind Playbook/ })).toBeVisible()
   await expect(page.getByText('Global Playbook')).toHaveCount(0)
 })
+
+test('assigns ownership to a global playbook', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/playbooks')
+
+  await expect(page.getByText('Global Playbook')).toBeVisible()
+  await page.getByLabel('Assign owner').nth(1).selectOption('northwind')
+  await expect(page.getByText('Owner: northwind')).toBeVisible()
+})
+
+test('assigns ownership to a global integration and shows migration queue', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+
+  await expect(page.getByText('Global Slack')).toBeVisible()
+  await page.getByLabel('Assign owner').first().selectOption('northwind')
+  await expect(page.getByText('owner: northwind')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Enterprise' }).click()
+  await expect(page.getByRole('heading', { name: 'Global Resource Migration' })).toBeVisible()
+})

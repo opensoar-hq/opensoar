@@ -215,6 +215,7 @@ export interface Integration {
   id: string
   integration_type: string
   name: string
+  partner: string | null
   enabled: boolean
   health_status: string | null
   last_health_check: string | null
@@ -260,6 +261,18 @@ export interface TenantInfo {
   config: Record<string, unknown>
   alert_count: number
   analyst_count: number
+}
+
+export interface GlobalResourceSummary {
+  id: string
+  name: string
+  resource_type: string
+  created_at: string
+}
+
+export interface GlobalResourceInventory {
+  integrations: GlobalResourceSummary[]
+  playbooks: GlobalResourceSummary[]
 }
 
 export interface SSOProviderInfo {
@@ -468,6 +481,7 @@ export const api = {
   },
   tenants: {
     list: () => fetchJSON<TenantInfo[]>('/tenants'),
+    globalResources: () => fetchJSON<GlobalResourceInventory>('/tenants/admin/global-resources'),
     create: (data: {
       name: string
       slug: string
