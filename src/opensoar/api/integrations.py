@@ -35,9 +35,7 @@ def _get_loader() -> IntegrationLoader:
 
 
 @router.get("/types")
-async def list_available_types(
-    _analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_READ)),
-):
+async def list_available_types():
     """Return all available integration types with metadata."""
     loader = _get_loader()
     return loader.available_types_detail()
