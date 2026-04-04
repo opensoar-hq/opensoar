@@ -26,6 +26,7 @@ type Tab = 'integrations' | 'api-keys' | 'analysts' | 'enterprise'
 function IntegrationsTab() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { analyst } = useAuth()
   const [showDialog, setShowDialog] = useState(false)
   const [form, setForm] = useState({ integration_type: '', name: '', config: '{}' })
 
@@ -37,6 +38,13 @@ function IntegrationsTab() {
   const { data: availableTypes } = useQuery({
     queryKey: ['integration-types'],
     queryFn: api.integrations.types,
+  })
+
+  const { data: tenants = [] } = useQuery({
+    queryKey: ['integration-owner-tenants'],
+    queryFn: api.tenants.list,
+    enabled: analyst?.role === 'admin',
+    retry: false,
   })
 
   const healthMutation = useMutation({
@@ -89,6 +97,19 @@ function IntegrationsTab() {
     },
     onError: () => {
       toast.error('Failed to delete integration')
+    },
+  })
+
+  const ownershipMutation = useMutation({
+    mutationFn: ({ id, partner }: { id: string; partner: string }) =>
+      api.integrations.update(id, { partner: partner || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['integrations'] })
+      queryClient.invalidateQueries({ queryKey: ['ee-global-resources'] })
+      toast.success('Integration ownership updated')
+    },
+    onError: () => {
+      toast.error('Failed to update integration ownership')
     },
   })
 
@@ -168,7 +189,29 @@ function IntegrationsTab() {
               <Plug size={14} className="text-muted shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-heading font-medium">{int.name}</div>
-                <div className="text-[11px] text-muted">{int.integration_type}</div>
+                <div className="text-[11px] text-muted">
+                  {int.integration_type} · owner: {int.partner || 'Global / unowned'}
+                </div>
+                {analyst?.role === 'admin' && (
+                  <div className="mt-2 max-w-xs">
+                    <label htmlFor={`integration-owner-${int.id}`} className="block text-[11px] text-muted mb-1">
+                      Assign owner
+                    </label>
+                    <Select
+                      id={`integration-owner-${int.id}`}
+                      value={int.partner || ''}
+                      onChange={(value) => ownershipMutation.mutate({ id: int.id, partner: value })}
+                      options={[
+                        { value: '', label: 'Global / unowned' },
+                        ...tenants.map((tenant) => ({
+                          value: tenant.legacy_partner_key || tenant.slug,
+                          label: tenant.name,
+                        })),
+                      ]}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
               {int.health_status && (
                 <span className={`text-[11px] px-2 py-0.5 rounded ${int.health_status === 'healthy' ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
@@ -418,6 +461,12 @@ function EnterpriseTab() {
   const providersQuery = useQuery({
     queryKey: ['ee-sso-providers'],
     queryFn: api.ssoProviders.list,
+    retry: false,
+  })
+
+  const globalResourcesQuery = useQuery({
+    queryKey: ['ee-global-resources'],
+    queryFn: api.tenants.globalResources,
     retry: false,
   })
 
@@ -1045,6 +1094,53 @@ function EnterpriseTab() {
               <Button size="sm" variant="primary" onClick={() => updateRetentionMutation.mutate()}>
                 Save Retention Policy
               </Button>
+            </div>
+          </Card>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">Global Resource Migration</h3>
+        </div>
+        {globalResourcesQuery.isError ? (
+          <EmptyState
+            icon={<Plug size={28} />}
+            title="Global resource inventory unavailable"
+            description="The migration inventory endpoint is not available in this deployment."
+          />
+        ) : globalResourcesQuery.isLoading ? (
+          <CardSkeleton lines={2} />
+        ) : (
+          <Card className="p-4 space-y-3">
+            <div className="text-xs text-muted">
+              Global / unowned records are still admin-managed. Assign them to a tenant from the Playbooks page or the Integrations tab here.
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Playbooks</div>
+                {globalResourcesQuery.data && globalResourcesQuery.data.playbooks.length > 0 ? (
+                  <div className="space-y-1">
+                    {globalResourcesQuery.data.playbooks.map((item) => (
+                      <div key={item.id} className="text-sm text-heading">{item.name}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted">No unowned playbooks</div>
+                )}
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wide text-muted mb-2">Integrations</div>
+                {globalResourcesQuery.data && globalResourcesQuery.data.integrations.length > 0 ? (
+                  <div className="space-y-1">
+                    {globalResourcesQuery.data.integrations.map((item) => (
+                      <div key={item.id} className="text-sm text-heading">{item.name}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted">No unowned integrations</div>
+                )}
+              </div>
             </div>
           </Card>
         )}

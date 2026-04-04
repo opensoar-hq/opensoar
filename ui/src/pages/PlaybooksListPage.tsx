@@ -11,8 +11,18 @@ import { Input } from '@/components/ui/Input'
 import { CardSkeleton } from '@/components/ui/Skeleton'
 import { PageTransition, StaggerParent, StaggerChild } from '@/components/ui/PageTransition'
 import { useToast } from '@/components/ui/Toast'
+import { Select } from '@/components/ui/Select'
+import { useAuth } from '@/contexts/AuthContext'
 
-function PlaybookCard({ playbook }: { playbook: Parameters<typeof api.playbooks.update>[1] & { id: string; name: string; description: string | null; module_path: string; function_name: string; trigger_type: string | null; trigger_config: Record<string, unknown>; enabled: boolean; version: number } }) {
+function PlaybookCard({
+  playbook,
+  ownerOptions,
+  canManageOwnership,
+}: {
+  playbook: Parameters<typeof api.playbooks.update>[1] & { id: string; name: string; description: string | null; partner: string | null; module_path: string; function_name: string; trigger_type: string | null; trigger_config: Record<string, unknown>; enabled: boolean; version: number }
+  ownerOptions: { value: string; label: string }[]
+  canManageOwnership: boolean
+}) {
   const queryClient = useQueryClient()
   const toast = useToast()
   const [showTrigger, setShowTrigger] = useState(false)
@@ -31,6 +41,18 @@ function PlaybookCard({ playbook }: { playbook: Parameters<typeof api.playbooks.
     },
     onError: () => {
       toast.error('Failed to trigger playbook', `Could not start ${playbook.name}`)
+    },
+  })
+
+  const ownershipMutation = useMutation({
+    mutationFn: (partner: string) => api.playbooks.update(playbook.id, { partner: partner || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['playbooks'] })
+      queryClient.invalidateQueries({ queryKey: ['ee-global-resources'] })
+      toast.success('Playbook ownership updated')
+    },
+    onError: () => {
+      toast.error('Failed to update playbook ownership')
     },
   })
 
@@ -57,6 +79,25 @@ function PlaybookCard({ playbook }: { playbook: Parameters<typeof api.playbooks.
               <span>Module: <code className="text-[11px] px-1 py-0.5 bg-bg rounded text-heading">{playbook.module_path}</code></span>
               <span>Function: <code className="text-[11px] px-1 py-0.5 bg-bg rounded text-heading">{playbook.function_name}</code></span>
             </div>
+
+            <div className="mt-2 text-[11px] text-muted">
+              Owner: {playbook.partner || 'Global / unowned'}
+            </div>
+
+            {canManageOwnership && (
+              <div className="mt-2 max-w-xs">
+                <label htmlFor={`playbook-owner-${playbook.id}`} className="block text-[11px] text-muted mb-1">
+                  Assign owner
+                </label>
+                <Select
+                  id={`playbook-owner-${playbook.id}`}
+                  value={playbook.partner || ''}
+                  onChange={(value) => ownershipMutation.mutate(value)}
+                  options={ownerOptions}
+                  className="w-full"
+                />
+              </div>
+            )}
 
             {playbook.trigger_config && Object.keys(playbook.trigger_config).length > 0 && (
               <div className="mt-2 text-[11px] text-muted">
@@ -106,10 +147,24 @@ function PlaybookCard({ playbook }: { playbook: Parameters<typeof api.playbooks.
 }
 
 export function PlaybooksListPage() {
+  const { analyst } = useAuth()
   const { data: playbooks, isLoading } = useQuery({
     queryKey: ['playbooks'],
     queryFn: api.playbooks.list,
   })
+  const { data: tenants = [] } = useQuery({
+    queryKey: ['playbook-owner-tenants'],
+    queryFn: api.tenants.list,
+    enabled: analyst?.role === 'admin',
+    retry: false,
+  })
+  const ownerOptions = [
+    { value: '', label: 'Global / unowned' },
+    ...tenants.map((tenant) => ({
+      value: tenant.legacy_partner_key || tenant.slug,
+      label: tenant.name,
+    })),
+  ]
 
   if (isLoading) {
     return (
@@ -136,7 +191,11 @@ export function PlaybooksListPage() {
         <StaggerParent className="grid gap-3">
           {playbooks.map((pb) => (
             <StaggerChild key={pb.id}>
-              <PlaybookCard playbook={pb} />
+              <PlaybookCard
+                playbook={pb}
+                ownerOptions={ownerOptions}
+                canManageOwnership={analyst?.role === 'admin'}
+              />
             </StaggerChild>
           ))}
         </StaggerParent>

@@ -93,6 +93,29 @@ interface MockEnterpriseState {
   analyst: Analyst | null
   authCapabilities: AuthCapabilities
   analysts: Analyst[]
+  integrations: {
+    id: string
+    integration_type: string
+    name: string
+    partner: string | null
+    enabled: boolean
+    health_status: string | null
+    last_health_check: string | null
+    created_at: string
+  }[]
+  playbooks: {
+    id: string
+    name: string
+    description: string | null
+    partner: string | null
+    module_path: string
+    function_name: string
+    trigger_type: string | null
+    trigger_config: Record<string, unknown>
+    enabled: boolean
+    version: number
+    created_at: string
+  }[]
   apiKeys: ApiKeyInfo[]
   apiKeyScopes: Record<string, ApiKeyScopeInfo>
   tenants: TenantInfo[]
@@ -106,6 +129,29 @@ interface MockEnterpriseOptions {
   analyst?: Analyst | null
   authCapabilities?: AuthCapabilities
   analysts?: Analyst[]
+  integrations?: {
+    id: string
+    integration_type: string
+    name: string
+    partner: string | null
+    enabled: boolean
+    health_status: string | null
+    last_health_check: string | null
+    created_at: string
+  }[]
+  playbooks?: {
+    id: string
+    name: string
+    description: string | null
+    partner: string | null
+    module_path: string
+    function_name: string
+    trigger_type: string | null
+    trigger_config: Record<string, unknown>
+    enabled: boolean
+    version: number
+    created_at: string
+  }[]
   apiKeys?: ApiKeyInfo[]
   apiKeyScopes?: Record<string, ApiKeyScopeInfo>
   tenants?: TenantInfo[]
@@ -163,6 +209,46 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
       providers: [],
     },
     analysts: options.analysts ?? [defaultAdmin, defaultAnalyst],
+    integrations: options.integrations ?? [
+      {
+        id: 'integration-1',
+        integration_type: 'slack',
+        name: 'Global Slack',
+        partner: null,
+        enabled: true,
+        health_status: null,
+        last_health_check: null,
+        created_at: now,
+      },
+    ],
+    playbooks: options.playbooks ?? [
+      {
+        id: 'playbook-1',
+        name: 'Northwind Playbook',
+        description: null,
+        partner: 'northwind',
+        module_path: 'playbooks.northwind',
+        function_name: 'run',
+        trigger_type: 'webhook',
+        trigger_config: {},
+        enabled: true,
+        version: 1,
+        created_at: now,
+      },
+      {
+        id: 'playbook-2',
+        name: 'Global Playbook',
+        description: null,
+        partner: null,
+        module_path: 'playbooks.global',
+        function_name: 'run',
+        trigger_type: 'webhook',
+        trigger_config: {},
+        enabled: true,
+        version: 1,
+        created_at: now,
+      },
+    ],
     apiKeys,
     apiKeyScopes: options.apiKeyScopes ?? {
       [apiKeys[0].id]: {
@@ -251,54 +337,56 @@ export async function mockEnterpriseApi(
       return
     }
 
+    if (method === 'GET' && pathname === '/api/v1/integrations') {
+      await fulfillJson(route, state.integrations)
+      return
+    }
+
+    if (pathname.startsWith('/api/v1/integrations/')) {
+      const integrationId = findId(pathname)
+      const integration = state.integrations.find((item) => item.id === integrationId)
+      if (!integration) {
+        await fulfillJson(route, { detail: 'Integration not found' }, 404)
+        return
+      }
+
+      if (method === 'PATCH') {
+        const body = requestBody(route)
+        Object.assign(integration, {
+          partner: typeof body.partner === 'string' ? body.partner : null,
+          enabled: typeof body.enabled === 'boolean' ? body.enabled : integration.enabled,
+        })
+        await fulfillJson(route, integration)
+        return
+      }
+    }
+
     if (method === 'GET' && pathname === '/api/v1/playbooks') {
       const tenantId = new URL(request.url()).searchParams.get('tenant_id')
       const playbooks = tenantId === 'tenant-1'
-        ? [
-            {
-              id: 'playbook-1',
-              name: 'Northwind Playbook',
-              description: null,
-              partner: 'northwind',
-              module_path: 'playbooks.northwind',
-              function_name: 'run',
-              trigger_type: 'webhook',
-              trigger_config: {},
-              enabled: true,
-              version: 1,
-              created_at: now,
-            },
-          ]
-        : [
-            {
-              id: 'playbook-1',
-              name: 'Northwind Playbook',
-              description: null,
-              partner: 'northwind',
-              module_path: 'playbooks.northwind',
-              function_name: 'run',
-              trigger_type: 'webhook',
-              trigger_config: {},
-              enabled: true,
-              version: 1,
-              created_at: now,
-            },
-            {
-              id: 'playbook-2',
-              name: 'Global Playbook',
-              description: null,
-              partner: null,
-              module_path: 'playbooks.global',
-              function_name: 'run',
-              trigger_type: 'webhook',
-              trigger_config: {},
-              enabled: true,
-              version: 1,
-              created_at: now,
-            },
-          ]
+        ? state.playbooks.filter((item) => item.partner === 'northwind')
+        : state.playbooks
       await fulfillJson(route, playbooks)
       return
+    }
+
+    if (pathname.startsWith('/api/v1/playbooks/')) {
+      const playbookId = findId(pathname)
+      const playbook = state.playbooks.find((item) => item.id === playbookId)
+      if (!playbook) {
+        await fulfillJson(route, { detail: 'Playbook not found' }, 404)
+        return
+      }
+
+      if (method === 'PATCH') {
+        const body = requestBody(route)
+        Object.assign(playbook, {
+          partner: typeof body.partner === 'string' ? body.partner : null,
+          enabled: typeof body.enabled === 'boolean' ? body.enabled : playbook.enabled,
+        })
+        await fulfillJson(route, playbook)
+        return
+      }
     }
 
     if (method === 'GET' && pathname === '/api/v1/dashboard/stats') {
@@ -632,6 +720,28 @@ export async function mockEnterpriseApi(
         await fulfillJson(route, state.dataRetention)
         return
       }
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/tenants/admin/global-resources') {
+      await fulfillJson(route, {
+        integrations: state.integrations
+          .filter((item) => item.partner === null)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            resource_type: 'integration',
+            created_at: item.created_at,
+          })),
+        playbooks: state.playbooks
+          .filter((item) => item.partner === null)
+          .map((item) => ({
+            id: item.id,
+            name: item.name,
+            resource_type: 'playbook',
+            created_at: item.created_at,
+          })),
+      })
+      return
     }
 
     if (pathname === '/api/v1/compliance/data-retention/enforce' && method === 'POST') {
