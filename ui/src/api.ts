@@ -290,6 +290,22 @@ export interface ReportScheduleInfo {
   last_run_detail: string | null
 }
 
+export interface DataRetentionPolicyInfo {
+  id: string
+  audit_log_retention_days: number | null
+  report_run_retention_days: number | null
+  auto_apply_enabled: boolean
+  last_enforced_at: string | null
+  last_enforcement_summary: Record<string, unknown> | null
+  notes: string | null
+}
+
+export interface DataRetentionEnforcementInfo {
+  audit_log_entries_deleted: number
+  report_runs_cleared: number
+  enforced_at: string
+}
+
 export interface Observable {
   id: string
   type: string
@@ -521,5 +537,15 @@ export const api = {
     }) => patchJSON<ReportScheduleInfo>(`/compliance/reports/schedules/${id}`, data as Record<string, unknown>),
     remove: (id: string) => deleteJSON(`/compliance/reports/schedules/${id}`),
     run: (id: string) => postJSON<{ detail: string; execution: Record<string, unknown>; schedule: ReportScheduleInfo }>(`/compliance/reports/schedules/${id}/run`, {}),
+  },
+  dataRetention: {
+    get: () => fetchJSON<DataRetentionPolicyInfo>('/compliance/data-retention'),
+    update: (data: {
+      audit_log_retention_days?: number | null
+      report_run_retention_days?: number | null
+      auto_apply_enabled: boolean
+      notes?: string | null
+    }) => putJSON<DataRetentionPolicyInfo>('/compliance/data-retention', data as Record<string, unknown>),
+    enforce: () => postJSON<DataRetentionEnforcementInfo>('/compliance/data-retention/enforce', {}),
   },
 }

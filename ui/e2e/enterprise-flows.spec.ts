@@ -89,7 +89,7 @@ test('updates scoped API key ownership from enterprise settings', async ({ page 
 
   await page.getByLabel('Scopes').fill('alerts:read, webhooks:ingest')
   await page.getByLabel('Tenant').selectOption({ label: 'Northwind Operations' })
-  await page.getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
 
   await page.getByRole('button', { name: 'Manage Scope' }).click()
   await expect(page.getByLabel('Scopes')).toHaveValue('alerts:read, webhooks:ingest')
@@ -115,4 +115,18 @@ test('creates and runs a report schedule from enterprise settings', async ({ pag
 
   await page.getByTitle('Run now').click()
   await expect(page.getByText('last: success')).toBeVisible()
+})
+
+test('updates retention policy from enterprise settings', async ({ page }) => {
+  await openEnterpriseSettings(page)
+
+  await expect(page.getByRole('heading', { name: 'Data Retention' })).toBeVisible()
+  await page.getByLabel('Audit Log Retention (Days)').fill('30')
+  await page.getByLabel('Report Run Metadata Retention (Days)').fill('14')
+  await page.getByLabel('Notes').fill('Short retention for staging')
+  await page.getByLabel('Automatically enforce on the background worker').check()
+  await page.getByRole('button', { name: 'Save Retention Policy' }).click()
+  await page.getByRole('button', { name: 'Run Enforcement Now' }).click()
+
+  await expect(page.getByText(/Last enforced/)).toBeVisible()
 })
