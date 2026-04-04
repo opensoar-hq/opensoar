@@ -12,6 +12,7 @@ class IntegrationInstance(Base):
 
     integration_type: Mapped[str] = mapped_column(String(100))
     name: Mapped[str] = mapped_column(String(255))
+    partner: Mapped[str | None] = mapped_column(String(100))
     config: Mapped[dict] = mapped_column(JSONB, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     health_status: Mapped[str | None] = mapped_column(String(20))

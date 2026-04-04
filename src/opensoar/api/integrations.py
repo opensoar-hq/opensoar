@@ -4,13 +4,16 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
+from opensoar.auth.jwt import get_current_analyst
 from opensoar.integrations.loader import IntegrationLoader
+from opensoar.models.analyst import Analyst
 from opensoar.models.integration import IntegrationInstance
+from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.schemas.integration import (
     IntegrationCreate,
     IntegrationResponse,
@@ -39,10 +42,22 @@ async def list_available_types():
 
 
 @router.get("", response_model=list[IntegrationResponse])
-async def list_integrations(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(
-        select(IntegrationInstance).order_by(IntegrationInstance.name)
+async def list_integrations(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    query = select(IntegrationInstance).order_by(IntegrationInstance.name)
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="integration",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
+    result = await session.execute(query)
     integrations = result.scalars().all()
     return [IntegrationResponse.model_validate(i) for i in integrations]
 
@@ -50,13 +65,25 @@ async def list_integrations(session: AsyncSession = Depends(get_db)):
 @router.post("", response_model=IntegrationResponse, status_code=201)
 async def create_integration(
     data: IntegrationCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     integration = IntegrationInstance(
         integration_type=data.integration_type,
         name=data.name,
+        partner=data.partner,
         config=data.config,
         enabled=data.enabled,
+    )
+    await enforce_tenant_access(
+        request.app,
+        resource=integration,
+        resource_type="integration",
+        action="create",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     session.add(integration)
     await session.commit()
@@ -67,7 +94,9 @@ async def create_integration(
 @router.get("/{integration_id}", response_model=IntegrationResponse)
 async def get_integration(
     integration_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -75,6 +104,15 @@ async def get_integration(
     integration = result.scalar_one_or_none()
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=integration,
+        resource_type="integration",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     return IntegrationResponse.model_validate(integration)
 
 
@@ -82,7 +120,9 @@ async def get_integration(
 async def update_integration(
     integration_id: uuid.UUID,
     update: IntegrationUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -94,6 +134,15 @@ async def update_integration(
     update_data = update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(integration, field, value)
+    await enforce_tenant_access(
+        request.app,
+        resource=integration,
+        resource_type="integration",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     await session.commit()
     await session.refresh(integration)
@@ -103,7 +152,9 @@ async def update_integration(
 @router.delete("/{integration_id}")
 async def delete_integration(
     integration_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -111,6 +162,15 @@ async def delete_integration(
     integration = result.scalar_one_or_none()
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=integration,
+        resource_type="integration",
+        action="delete",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     await session.delete(integration)
     await session.commit()
@@ -120,7 +180,9 @@ async def delete_integration(
 @router.post("/{integration_id}/health")
 async def check_integration_health(
     integration_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
 ):
     """Run a health check on an integration and persist the result."""
     result = await session.execute(
@@ -129,6 +191,15 @@ async def check_integration_health(
     integration = result.scalar_one_or_none()
     if not integration:
         raise HTTPException(status_code=404, detail="Integration not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=integration,
+        resource_type="integration",
+        action="health",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     loader = _get_loader()
     connector_cls = loader.get_connector(integration.integration_type)

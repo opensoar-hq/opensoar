@@ -11,6 +11,7 @@ class PlaybookResponse(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None = None
+    partner: str | None = None
     module_path: str
     function_name: str
     trigger_type: str | None = None
@@ -24,6 +25,7 @@ class PlaybookResponse(BaseModel):
 
 class PlaybookUpdate(BaseModel):
     enabled: bool | None = None
+    partner: str | None = None
 
 
 class PlaybookRunRequest(BaseModel):
