@@ -39,3 +39,5 @@ htmlcov/
 .pytest_cache/
 ui/.vite/
 .vite/
+ui/playwright-report/
+ui/test-results/
