@@ -374,8 +374,11 @@ function AnalystsTab() {
                 value={a.role}
                 onChange={(v) => updateMutation.mutate({ id: a.id, data: { role: v } })}
                 options={[
-                  { value: 'analyst', label: 'Analyst' },
                   { value: 'admin', label: 'Admin' },
+                  { value: 'analyst', label: 'Analyst' },
+                  { value: 'viewer', label: 'Viewer' },
+                  { value: 'tenant_admin', label: 'Tenant Admin' },
+                  { value: 'playbook_author', label: 'Playbook Author' },
                 ]}
               />
               <span className={`text-[11px] px-2 py-0.5 rounded ${a.is_active ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>

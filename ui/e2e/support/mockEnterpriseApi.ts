@@ -251,6 +251,25 @@ export async function mockEnterpriseApi(
       return
     }
 
+    if (pathname.startsWith('/api/v1/auth/analysts/')) {
+      const analystId = findId(pathname)
+      const analyst = state.analysts.find((item) => item.id === analystId)
+      if (!analyst) {
+        await fulfillJson(route, { detail: 'Analyst not found' }, 404)
+        return
+      }
+
+      if (method === 'PATCH') {
+        const body = requestBody(route)
+        Object.assign(analyst, {
+          role: typeof body.role === 'string' ? body.role : analyst.role,
+          is_active: typeof body.is_active === 'boolean' ? body.is_active : analyst.is_active,
+        })
+        await fulfillJson(route, analyst)
+        return
+      }
+    }
+
     if (method === 'GET' && pathname === '/api/v1/api-keys') {
       await fulfillJson(route, state.apiKeys)
       return

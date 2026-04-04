@@ -58,6 +58,18 @@ class TestRegister:
         assert data["access_token"]
         assert data["analyst"]["username"] == username
 
+    async def test_register_rejects_unknown_role(self, client):
+        resp = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": f"badrole_{uuid.uuid4().hex[:8]}",
+                "display_name": "Bad Role",
+                "password": "securepass123",
+                "role": "superuser",
+            },
+        )
+        assert resp.status_code == 422
+
     async def test_register_duplicate_username(self, client):
         username = f"dup_{uuid.uuid4().hex[:8]}"
         body = {
@@ -346,3 +358,54 @@ class TestExternalIdentities:
         stored = result.scalar_one()
         assert stored.analyst_id == analyst.id
         assert stored.provider_type == "oidc"
+
+
+class TestAdminRoleUpdates:
+    async def test_admin_can_assign_enterprise_roles(self, client, registered_admin, session):
+        from opensoar.models.analyst import Analyst
+
+        analyst = Analyst(
+            username=f"role_target_{uuid.uuid4().hex[:8]}",
+            display_name="Role Target",
+            email="role.target@opensoar.app",
+            password_hash="$2b$12$LJ3m4ys3Lz0Y1r2VQz5Zu.dummyhashnotreal000000000000000",
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.commit()
+
+        tenant_admin_resp = await client.patch(
+            f"/api/v1/auth/analysts/{analyst.id}",
+            headers=registered_admin["headers"],
+            json={"role": "tenant_admin"},
+        )
+        assert tenant_admin_resp.status_code == 200
+        assert tenant_admin_resp.json()["role"] == "tenant_admin"
+
+        playbook_author_resp = await client.patch(
+            f"/api/v1/auth/analysts/{analyst.id}",
+            headers=registered_admin["headers"],
+            json={"role": "playbook_author"},
+        )
+        assert playbook_author_resp.status_code == 200
+        assert playbook_author_resp.json()["role"] == "playbook_author"
+
+    async def test_admin_update_rejects_unknown_role(self, client, registered_admin, session):
+        from opensoar.models.analyst import Analyst
+
+        analyst = Analyst(
+            username=f"unknown_role_target_{uuid.uuid4().hex[:8]}",
+            display_name="Unknown Role Target",
+            email="unknown.role.target@opensoar.app",
+            password_hash="$2b$12$LJ3m4ys3Lz0Y1r2VQz5Zu.dummyhashnotreal000000000000000",
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.commit()
+
+        resp = await client.patch(
+            f"/api/v1/auth/analysts/{analyst.id}",
+            headers=registered_admin["headers"],
+            json={"role": "superuser"},
+        )
+        assert resp.status_code == 422
