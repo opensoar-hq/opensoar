@@ -261,6 +261,21 @@ export interface TenantInfo {
   analyst_count: number
 }
 
+export interface SSOProviderInfo {
+  id: string
+  provider_type: string
+  name: string
+  issuer: string
+  client_id: string
+  authorize_url: string
+  token_url: string
+  userinfo_url: string | null
+  jwks_uri: string | null
+  scope: string
+  enabled: boolean
+  extra_config: Record<string, unknown>
+}
+
 export interface ReportScheduleInfo {
   id: string
   report_type: string
@@ -433,6 +448,55 @@ export const api = {
   },
   tenants: {
     list: () => fetchJSON<TenantInfo[]>('/tenants'),
+    create: (data: {
+      name: string
+      slug: string
+      legacy_partner_key?: string | null
+      config?: Record<string, unknown>
+      analyst_ids?: string[]
+      tenant_admin_ids?: string[]
+    }) => postJSON<TenantInfo>('/tenants', data as Record<string, unknown>),
+    update: (id: string, data: {
+      name?: string
+      slug?: string
+      legacy_partner_key?: string | null
+      is_active?: boolean
+      config?: Record<string, unknown>
+      analyst_ids?: string[]
+      tenant_admin_ids?: string[]
+    }) => patchJSON<TenantInfo>(`/tenants/${id}`, data as Record<string, unknown>),
+    remove: (id: string) => deleteJSON(`/tenants/${id}`),
+  },
+  ssoProviders: {
+    list: () => fetchJSON<SSOProviderInfo[]>('/sso/providers'),
+    create: (data: {
+      provider_type?: string
+      name: string
+      issuer: string
+      client_id: string
+      client_secret: string
+      authorize_url: string
+      token_url: string
+      userinfo_url?: string
+      jwks_uri?: string
+      scope?: string
+      enabled?: boolean
+      extra_config?: Record<string, unknown>
+    }) => postJSON<SSOProviderInfo>('/sso/providers', data as Record<string, unknown>),
+    update: (id: string, data: {
+      name?: string
+      issuer?: string
+      client_id?: string
+      client_secret?: string
+      authorize_url?: string
+      token_url?: string
+      userinfo_url?: string | null
+      jwks_uri?: string | null
+      scope?: string
+      enabled?: boolean
+      extra_config?: Record<string, unknown>
+    }) => patchJSON<SSOProviderInfo>(`/sso/providers/${id}`, data as Record<string, unknown>),
+    remove: (id: string) => deleteJSON(`/sso/providers/${id}`),
   },
   dashboard: {
     stats: () => fetchJSON<DashboardStats>('/dashboard/stats'),

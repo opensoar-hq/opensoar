@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Settings, Plug, Key, Users, Plus, Trash2, Shield,
-  CheckCircle, XCircle, Copy, Heart, Loader2, CalendarDays, Play,
+  CheckCircle, XCircle, Copy, Heart, Loader2, CalendarDays, Play, Building2,
 } from 'lucide-react'
 import { api, type Integration } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -401,10 +401,53 @@ function AnalystsTab() {
 function EnterpriseTab() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const { data: analysts } = useQuery({
+    queryKey: ['analysts'],
+    queryFn: api.analysts.list,
+  })
+
+  const { data: tenants, isLoading: tenantsLoading, isError: tenantsUnavailable } = useQuery({
+    queryKey: ['ee-tenants'],
+    queryFn: api.tenants.list,
+    retry: false,
+  })
+
+  const providersQuery = useQuery({
+    queryKey: ['ee-sso-providers'],
+    queryFn: api.ssoProviders.list,
+    retry: false,
+  })
+
   const [showScopeDialog, setShowScopeDialog] = useState(false)
   const [selectedKeyId, setSelectedKeyId] = useState<string | null>(null)
   const [scopeText, setScopeText] = useState('')
   const [scopeTenantId, setScopeTenantId] = useState('')
+  const [showTenantDialog, setShowTenantDialog] = useState(false)
+  const [editingTenantId, setEditingTenantId] = useState<string | null>(null)
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    slug: '',
+    legacy_partner_key: '',
+    partner_aliases: '',
+    analyst_ids: [] as string[],
+    tenant_admin_ids: [] as string[],
+    is_active: true,
+  })
+  const [showProviderDialog, setShowProviderDialog] = useState(false)
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(null)
+  const [providerForm, setProviderForm] = useState({
+    name: '',
+    issuer: '',
+    client_id: '',
+    client_secret: '',
+    authorize_url: '',
+    token_url: '',
+    userinfo_url: '',
+    jwks_uri: '',
+    scope: 'openid profile email',
+    enabled: true,
+    extra_config: '{}',
+  })
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [scheduleForm, setScheduleForm] = useState({
     report_type: 'sla_compliance',
@@ -418,12 +461,6 @@ function EnterpriseTab() {
   const { data: keys, isLoading: keysLoading } = useQuery({
     queryKey: ['api-keys'],
     queryFn: api.apiKeys.list,
-  })
-
-  const { data: tenants, isLoading: tenantsLoading } = useQuery({
-    queryKey: ['ee-tenants'],
-    queryFn: api.tenants.list,
-    retry: false,
   })
 
   const schedulesQuery = useQuery({
@@ -508,10 +545,277 @@ function EnterpriseTab() {
     },
   })
 
-  const enterpriseUnavailable = schedulesQuery.isError && tenants !== undefined
+  const enterpriseUnavailable = schedulesQuery.isError
+
+  const createTenantMutation = useMutation({
+    mutationFn: () => {
+      const config: Record<string, unknown> = {}
+      const aliases = tenantForm.partner_aliases.split(',').map((s) => s.trim()).filter(Boolean)
+      if (aliases.length > 0) config.partner_aliases = aliases
+
+      const payload = {
+        name: tenantForm.name,
+        slug: tenantForm.slug,
+        legacy_partner_key: tenantForm.legacy_partner_key || null,
+        config,
+        analyst_ids: tenantForm.analyst_ids,
+        tenant_admin_ids: tenantForm.tenant_admin_ids,
+      }
+
+      return editingTenantId
+        ? api.tenants.update(editingTenantId, { ...payload, is_active: tenantForm.is_active })
+        : api.tenants.create(payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-tenants'] })
+      toast.success(`Tenant ${editingTenantId ? 'updated' : 'created'}`)
+      setShowTenantDialog(false)
+      setEditingTenantId(null)
+      setTenantForm({
+        name: '',
+        slug: '',
+        legacy_partner_key: '',
+        partner_aliases: '',
+        analyst_ids: [],
+        tenant_admin_ids: [],
+        is_active: true,
+      })
+    },
+    onError: () => {
+      toast.error(`Failed to ${editingTenantId ? 'update' : 'create'} tenant`)
+    },
+  })
+
+  const deleteTenantMutation = useMutation({
+    mutationFn: (id: string) => api.tenants.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-tenants'] })
+      toast.success('Tenant deactivated')
+    },
+    onError: () => {
+      toast.error('Failed to deactivate tenant')
+    },
+  })
+
+  const createProviderMutation = useMutation({
+    mutationFn: () => {
+      const extra_config = (() => {
+        try { return JSON.parse(providerForm.extra_config) } catch { return {} }
+      })()
+
+      const payload = {
+        name: providerForm.name,
+        issuer: providerForm.issuer,
+        client_id: providerForm.client_id,
+        authorize_url: providerForm.authorize_url,
+        token_url: providerForm.token_url,
+        userinfo_url: providerForm.userinfo_url || undefined,
+        jwks_uri: providerForm.jwks_uri || undefined,
+        scope: providerForm.scope,
+        enabled: providerForm.enabled,
+        extra_config,
+        ...(providerForm.client_secret ? { client_secret: providerForm.client_secret } : {}),
+      }
+
+      return editingProviderId
+        ? api.ssoProviders.update(editingProviderId, payload)
+        : api.ssoProviders.create({ provider_type: 'oidc', client_secret: providerForm.client_secret, ...payload })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-sso-providers'] })
+      toast.success(`OIDC provider ${editingProviderId ? 'updated' : 'created'}`)
+      setShowProviderDialog(false)
+      setEditingProviderId(null)
+      setProviderForm({
+        name: '',
+        issuer: '',
+        client_id: '',
+        client_secret: '',
+        authorize_url: '',
+        token_url: '',
+        userinfo_url: '',
+        jwks_uri: '',
+        scope: 'openid profile email',
+        enabled: true,
+        extra_config: '{}',
+      })
+    },
+    onError: () => {
+      toast.error(`Failed to ${editingProviderId ? 'update' : 'create'} OIDC provider`)
+    },
+  })
+
+  const deleteProviderMutation = useMutation({
+    mutationFn: (id: string) => api.ssoProviders.remove(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ee-sso-providers'] })
+      toast.success('OIDC provider deleted')
+    },
+    onError: () => {
+      toast.error('Failed to delete OIDC provider')
+    },
+  })
 
   return (
     <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">Tenants</h3>
+          <Button size="sm" onClick={() => {
+            setEditingTenantId(null)
+            setTenantForm({
+              name: '',
+              slug: '',
+              legacy_partner_key: '',
+              partner_aliases: '',
+              analyst_ids: [],
+              tenant_admin_ids: [],
+              is_active: true,
+            })
+            setShowTenantDialog(true)
+          }}>
+            <Plus size={14} /> Add Tenant
+          </Button>
+        </div>
+        {tenantsUnavailable ? (
+          <EmptyState
+            icon={<Building2 size={28} />}
+            title="Tenant management unavailable"
+            description="The tenant management endpoints are not available in this deployment."
+          />
+        ) : tenantsLoading ? (
+          <CardSkeleton lines={2} />
+        ) : tenants && tenants.length > 0 ? (
+          <Card>
+            {tenants.map((tenant) => (
+              <div key={tenant.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0">
+                <Building2 size={14} className="text-muted shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-heading">{tenant.name}</div>
+                  <div className="text-[11px] text-muted">
+                    {tenant.slug}
+                    {tenant.legacy_partner_key ? ` · ${tenant.legacy_partner_key}` : ''}
+                    {` · alerts: ${tenant.alert_count} · analysts: ${tenant.analyst_count}`}
+                  </div>
+                </div>
+                <span className={`text-[11px] px-2 py-0.5 rounded ${tenant.is_active ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+                  {tenant.is_active ? 'Active' : 'Inactive'}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingTenantId(tenant.id)
+                    setTenantForm({
+                      name: tenant.name,
+                      slug: tenant.slug,
+                      legacy_partner_key: tenant.legacy_partner_key || '',
+                      partner_aliases: Array.isArray((tenant.config as Record<string, unknown>).partner_aliases)
+                        ? ((tenant.config as Record<string, unknown>).partner_aliases as string[]).join(', ')
+                        : '',
+                      analyst_ids: [],
+                      tenant_admin_ids: [],
+                      is_active: tenant.is_active,
+                    })
+                    setShowTenantDialog(true)
+                  }}
+                >
+                  Edit
+                </Button>
+                <button
+                  onClick={() => deleteTenantMutation.mutate(tenant.id)}
+                  className="p-1.5 rounded hover:bg-danger/10 text-muted hover:text-danger bg-transparent border-none cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </Card>
+        ) : (
+          <EmptyState icon={<Building2 size={28} />} title="No tenants" description="Create a tenant to assign memberships and scope enterprise access" />
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">OIDC Providers</h3>
+          <Button size="sm" onClick={() => {
+            setEditingProviderId(null)
+            setProviderForm({
+              name: '',
+              issuer: '',
+              client_id: '',
+              client_secret: '',
+              authorize_url: '',
+              token_url: '',
+              userinfo_url: '',
+              jwks_uri: '',
+              scope: 'openid profile email',
+              enabled: true,
+              extra_config: '{}',
+            })
+            setShowProviderDialog(true)
+          }}>
+            <Plus size={14} /> Add Provider
+          </Button>
+        </div>
+        {providersQuery.isError ? (
+          <EmptyState
+            icon={<Shield size={28} />}
+            title="OIDC provider management unavailable"
+            description="The provider management endpoints are not available in this deployment."
+          />
+        ) : providersQuery.isLoading ? (
+          <CardSkeleton lines={2} />
+        ) : providersQuery.data && providersQuery.data.length > 0 ? (
+          <Card>
+            {providersQuery.data.map((provider) => (
+              <div key={provider.id} className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0">
+                <Shield size={14} className="text-muted shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-heading">{provider.name}</div>
+                  <div className="text-[11px] text-muted">{provider.issuer}</div>
+                </div>
+                <span className={`text-[11px] px-2 py-0.5 rounded ${provider.enabled ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
+                  {provider.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditingProviderId(provider.id)
+                    setProviderForm({
+                      name: provider.name,
+                      issuer: provider.issuer,
+                      client_id: provider.client_id,
+                      client_secret: '',
+                      authorize_url: provider.authorize_url,
+                      token_url: provider.token_url,
+                      userinfo_url: provider.userinfo_url || '',
+                      jwks_uri: provider.jwks_uri || '',
+                      scope: provider.scope,
+                      enabled: provider.enabled,
+                      extra_config: JSON.stringify(provider.extra_config || {}, null, 2),
+                    })
+                    setShowProviderDialog(true)
+                  }}
+                >
+                  Edit
+                </Button>
+                <button
+                  onClick={() => deleteProviderMutation.mutate(provider.id)}
+                  className="p-1.5 rounded hover:bg-danger/10 text-muted hover:text-danger bg-transparent border-none cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </Card>
+        ) : (
+          <EmptyState icon={<Shield size={28} />} title="No OIDC providers" description="Create a provider to enable enterprise sign-in" />
+        )}
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-medium text-heading m-0">Scoped API Keys</h3>
@@ -638,6 +942,162 @@ function EnterpriseTab() {
                 Save
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showTenantDialog} onClose={() => setShowTenantDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowTenantDialog(false)}>
+            <DialogTitle>{editingTenantId ? 'Edit Tenant' : 'Create Tenant'}</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Name</Label>
+                <Input value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Slug</Label>
+                <Input value={tenantForm.slug} onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Legacy Partner Key</Label>
+              <Input
+                value={tenantForm.legacy_partner_key}
+                onChange={(e) => setTenantForm({ ...tenantForm, legacy_partner_key: e.target.value })}
+                placeholder="acme-corp"
+              />
+            </div>
+            <div>
+              <Label>Partner Aliases</Label>
+              <Input
+                value={tenantForm.partner_aliases}
+                onChange={(e) => setTenantForm({ ...tenantForm, partner_aliases: e.target.value })}
+                placeholder="alias-one, alias-two"
+              />
+            </div>
+            <div>
+              <Label>Members</Label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-border rounded-md p-3">
+                {(analysts || []).map((analyst) => (
+                  <label key={analyst.id} className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={tenantForm.analyst_ids.includes(analyst.id)}
+                      onChange={(e) => setTenantForm({
+                        ...tenantForm,
+                        analyst_ids: e.target.checked
+                          ? [...tenantForm.analyst_ids, analyst.id]
+                          : tenantForm.analyst_ids.filter((id) => id !== analyst.id),
+                      })}
+                    />
+                    {analyst.display_name}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Tenant Admins</Label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border border-border rounded-md p-3">
+                {(analysts || []).map((analyst) => (
+                  <label key={analyst.id} className="flex items-center gap-2 text-xs text-text">
+                    <input
+                      type="checkbox"
+                      checked={tenantForm.tenant_admin_ids.includes(analyst.id)}
+                      onChange={(e) => setTenantForm({
+                        ...tenantForm,
+                        tenant_admin_ids: e.target.checked
+                          ? [...tenantForm.tenant_admin_ids, analyst.id]
+                          : tenantForm.tenant_admin_ids.filter((id) => id !== analyst.id),
+                      })}
+                    />
+                    {analyst.display_name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowTenantDialog(false)}>Cancel</Button>
+            <Button size="sm" variant="primary" onClick={() => createTenantMutation.mutate()}>
+              {editingTenantId ? 'Save' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showProviderDialog} onClose={() => setShowProviderDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowProviderDialog(false)}>
+            <DialogTitle>{editingProviderId ? 'Edit OIDC Provider' : 'Create OIDC Provider'}</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Name</Label>
+                <Input value={providerForm.name} onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })} />
+              </div>
+              <div>
+                <Label>Issuer</Label>
+                <Input value={providerForm.issuer} onChange={(e) => setProviderForm({ ...providerForm, issuer: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Client ID</Label>
+                <Input value={providerForm.client_id} onChange={(e) => setProviderForm({ ...providerForm, client_id: e.target.value })} />
+              </div>
+              <div>
+                <Label>Client Secret</Label>
+                <Input
+                  type="password"
+                  value={providerForm.client_secret}
+                  onChange={(e) => setProviderForm({ ...providerForm, client_secret: e.target.value })}
+                  placeholder={editingProviderId ? 'Leave blank to keep current' : ''}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Authorize URL</Label>
+                <Input value={providerForm.authorize_url} onChange={(e) => setProviderForm({ ...providerForm, authorize_url: e.target.value })} />
+              </div>
+              <div>
+                <Label>Token URL</Label>
+                <Input value={providerForm.token_url} onChange={(e) => setProviderForm({ ...providerForm, token_url: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Userinfo URL</Label>
+                <Input value={providerForm.userinfo_url} onChange={(e) => setProviderForm({ ...providerForm, userinfo_url: e.target.value })} />
+              </div>
+              <div>
+                <Label>JWKS URI</Label>
+                <Input value={providerForm.jwks_uri} onChange={(e) => setProviderForm({ ...providerForm, jwks_uri: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <Label>Scope</Label>
+              <Input value={providerForm.scope} onChange={(e) => setProviderForm({ ...providerForm, scope: e.target.value })} />
+            </div>
+            <div>
+              <Label>Extra Config (JSON)</Label>
+              <Textarea
+                value={providerForm.extra_config}
+                onChange={(e) => setProviderForm({ ...providerForm, extra_config: e.target.value })}
+                rows={4}
+                className="font-mono"
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowProviderDialog(false)}>Cancel</Button>
+            <Button size="sm" variant="primary" onClick={() => createProviderMutation.mutate()}>
+              {editingProviderId ? 'Save' : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
