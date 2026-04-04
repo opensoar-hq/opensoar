@@ -251,6 +251,31 @@ export async function mockEnterpriseApi(
       return
     }
 
+    if (method === 'GET' && pathname === '/api/v1/dashboard/stats') {
+      const tenantId = new URL(request.url()).searchParams.get('tenant_id')
+      const partner = tenantId === 'tenant-1' ? 'Northwind Operations' : 'All Partners'
+      await fulfillJson(route, {
+        alerts_by_severity: { high: 1 },
+        alerts_by_status: { new: 1 },
+        alerts_by_partner: { [partner]: 1 },
+        alerts_by_determination: { unknown: 1 },
+        open_by_partner: { [partner]: 1 },
+        mttr_by_partner: { [partner]: 3600 },
+        total_alerts: 1,
+        total_runs: 1,
+        open_alerts: 1,
+        alerts_today: 1,
+        active_runs: 0,
+        unassigned_count: 1,
+        mttr_seconds: 3600,
+        priority_queue: [],
+        my_alerts: [],
+        recent_alerts: [],
+        recent_runs: [],
+      })
+      return
+    }
+
     if (pathname.startsWith('/api/v1/auth/analysts/')) {
       const analystId = findId(pathname)
       const analyst = state.analysts.find((item) => item.id === analystId)

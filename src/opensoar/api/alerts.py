@@ -36,6 +36,7 @@ async def list_alerts(
     severity: str | None = None,
     source: str | None = None,
     partner: str | None = None,
+    tenant_id: str | None = None,
     determination: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),

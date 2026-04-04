@@ -12,6 +12,7 @@ import { StatSkeleton, CardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PageTransition, StaggerParent, StaggerChild } from '@/components/ui/PageTransition'
 import { useAuth } from '@/contexts/AuthContext'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { timeAgo } from '@/lib/utils'
 import { SeverityDonut } from '@/components/dashboard/SeverityDonut'
 import { ActivitySparkline } from '@/components/dashboard/ActivitySparkline'
@@ -77,9 +78,10 @@ function DashboardSkeleton() {
 
 export function DashboardPage() {
   const { analyst } = useAuth()
+  const { selectedTenantId } = useWorkspace()
   const { data, isLoading } = useQuery({
-    queryKey: ['dashboard'],
-    queryFn: api.dashboard.stats,
+    queryKey: ['dashboard', selectedTenantId],
+    queryFn: () => api.dashboard.stats(selectedTenantId || undefined),
   })
 
   if (isLoading) {

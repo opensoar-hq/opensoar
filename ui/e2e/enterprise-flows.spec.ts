@@ -136,7 +136,15 @@ test('updates an analyst role to playbook author', async ({ page }) => {
   await page.goto('/settings')
   await page.getByRole('button', { name: 'Analysts' }).click()
 
-  const roleSelect = page.locator('select').first()
+  const roleSelect = page.locator('select').nth(1)
   await roleSelect.selectOption('playbook_author')
   await expect(roleSelect).toHaveValue('playbook_author')
+})
+
+test('selects a workspace from the sidebar switcher', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+
+  await page.getByLabel('Workspace').selectOption('tenant-1')
+  await expect(page.getByLabel('Workspace')).toHaveValue('tenant-1')
 })

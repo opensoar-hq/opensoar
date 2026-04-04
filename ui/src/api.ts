@@ -349,12 +349,13 @@ export const api = {
       postJSON<WebhookResponse>('/webhooks/alerts', payload),
   },
   alerts: {
-    list: (params?: { status?: string; severity?: string; source?: string; partner?: string; determination?: string; search?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; severity?: string; source?: string; partner?: string; tenant_id?: string; determination?: string; search?: string; limit?: number; offset?: number }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
       if (params?.severity) sp.set('severity', params.severity)
       if (params?.source) sp.set('source', params.source)
       if (params?.partner) sp.set('partner', params.partner)
+      if (params?.tenant_id) sp.set('tenant_id', params.tenant_id)
       if (params?.determination) sp.set('determination', params.determination)
       if (params?.limit) sp.set('limit', String(params.limit))
       if (params?.offset) sp.set('offset', String(params.offset))
@@ -515,7 +516,7 @@ export const api = {
     remove: (id: string) => deleteJSON(`/sso/providers/${id}`),
   },
   dashboard: {
-    stats: () => fetchJSON<DashboardStats>('/dashboard/stats'),
+    stats: (tenantId?: string) => fetchJSON<DashboardStats>(`/dashboard/stats${tenantId ? `?tenant_id=${tenantId}` : ''}`),
   },
   reportSchedules: {
     list: () => fetchJSON<ReportScheduleInfo[]>('/compliance/reports/schedules'),

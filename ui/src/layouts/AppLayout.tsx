@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import {
   Sidebar,
   SidebarBody,
@@ -14,6 +15,7 @@ import {
   SidebarLabel,
   useSidebar,
 } from '@/components/ui/Sidebar'
+import { Select } from '@/components/ui/Select'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} />, end: true },
@@ -25,6 +27,7 @@ const navItems = [
 
 function SidebarContent() {
   const { analyst, logout } = useAuth()
+  const { tenants, selectedTenantId, setSelectedTenantId } = useWorkspace()
   const { open, animate } = useSidebar()
 
   return (
@@ -47,6 +50,31 @@ function SidebarContent() {
 
       {/* Nav */}
       <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden mt-2">
+        {tenants.length > 0 && (
+          <div className="px-2 mb-3">
+            <motion.div
+              animate={{
+                display: animate ? (open ? 'block' : 'none') : 'block',
+                opacity: animate ? (open ? 1 : 0) : 1,
+              }}
+              transition={{ duration: 0.15 }}
+            >
+              <label htmlFor="workspace-switcher" className="block text-[11px] uppercase tracking-wide text-muted mb-1.5">
+                Workspace
+              </label>
+              <Select
+                id="workspace-switcher"
+                value={selectedTenantId}
+                onChange={setSelectedTenantId}
+                options={[
+                  { value: '', label: analyst?.role === 'admin' ? 'All tenants' : 'All workspaces' },
+                  ...tenants.map((tenant) => ({ value: tenant.id, label: tenant.name })),
+                ]}
+                className="w-full"
+              />
+            </motion.div>
+          </div>
+        )}
         <SidebarLabel>Navigation</SidebarLabel>
         <div className="flex flex-col gap-0.5">
           {navItems.map((item) => (
