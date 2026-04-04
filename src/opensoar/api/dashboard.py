@@ -21,6 +21,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 @router.get("/stats")
 async def dashboard_stats(
     request: Request,
+    tenant_id: str | None = None,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst | None = Depends(get_current_analyst),
 ):

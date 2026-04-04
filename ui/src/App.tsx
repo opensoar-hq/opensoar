@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
+import { WorkspaceProvider } from '@/contexts/WorkspaceContext'
 import { ToastProvider } from '@/components/ui/Toast'
 import { AppLayout } from '@/layouts/AppLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
@@ -61,24 +62,26 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <ToastProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
-              <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-                <Route index element={<DashboardPage />} />
-                <Route path="alerts" element={<AlertsListPage />} />
-                <Route path="alerts/:id" element={<AlertDetailPage />} />
-                <Route path="runs" element={<RunsListPage />} />
-                <Route path="runs/:id" element={<RunDetailPage />} />
-                <Route path="incidents" element={<IncidentsListPage />} />
-                <Route path="incidents/:id" element={<IncidentDetailPage />} />
-                <Route path="playbooks" element={<PlaybooksListPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </ToastProvider>
+        <WorkspaceProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+                <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+                  <Route index element={<DashboardPage />} />
+                  <Route path="alerts" element={<AlertsListPage />} />
+                  <Route path="alerts/:id" element={<AlertDetailPage />} />
+                  <Route path="runs" element={<RunsListPage />} />
+                  <Route path="runs/:id" element={<RunDetailPage />} />
+                  <Route path="incidents" element={<IncidentsListPage />} />
+                  <Route path="incidents/:id" element={<IncidentDetailPage />} />
+                  <Route path="playbooks" element={<PlaybooksListPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </ToastProvider>
+        </WorkspaceProvider>
       </AuthProvider>
     </QueryClientProvider>
   )

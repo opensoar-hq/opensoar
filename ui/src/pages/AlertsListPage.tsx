@@ -18,6 +18,7 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
 import { PageTransition } from '@/components/ui/PageTransition'
 import { useToast } from '@/components/ui/Toast'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { cn, timeAgo } from '@/lib/utils'
 
 function CreateAlertDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -188,6 +189,7 @@ function CreateAlertDialog({ open, onClose }: { open: boolean; onClose: () => vo
 export function AlertsListPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { selectedTenantId } = useWorkspace()
   const [filters, setFilters] = useState<{ severity?: string; status?: string; partner?: string; search?: string }>({})
   const [page, setPage] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -197,8 +199,8 @@ export function AlertsListPage() {
   const selectionActive = selected.size > 0
 
   const { data, isLoading } = useQuery({
-    queryKey: ['alerts', filters, page],
-    queryFn: () => api.alerts.list({ ...filters, limit, offset: page * limit }),
+    queryKey: ['alerts', filters, page, selectedTenantId],
+    queryFn: () => api.alerts.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
 
   const bulkMutation = useMutation({
