@@ -1,15 +1,19 @@
 import { cn } from '@/lib/utils'
 
 interface SelectProps {
+  id?: string
+  name?: string
   value: string
   onChange: (value: string) => void
   options: { value: string; label: string }[]
   className?: string
 }
 
-export function Select({ value, onChange, options, className }: SelectProps) {
+export function Select({ id, name, value, onChange, options, className }: SelectProps) {
   return (
     <select
+      id={id}
+      name={name}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className={cn(

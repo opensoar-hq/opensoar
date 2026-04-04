@@ -41,7 +41,7 @@ function IntegrationsTab() {
 
   const healthMutation = useMutation({
     mutationFn: (id: string) => api.integrations.healthCheck(id),
-    onSuccess: (_data, _id) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['integrations'] })
     },
     onError: () => {
@@ -910,16 +910,18 @@ function EnterpriseTab() {
             ) : (
               <>
                 <div>
-                  <Label>Scopes</Label>
+                  <Label htmlFor="enterprise-scope-scopes">Scopes</Label>
                   <Input
+                    id="enterprise-scope-scopes"
                     value={scopeText || (scopeQuery.data?.scopes.join(', ') ?? '')}
                     onChange={(e) => setScopeText(e.target.value)}
                     placeholder="webhooks:ingest, webhooks:ingest:elastic"
                   />
                 </div>
                 <div>
-                  <Label>Tenant</Label>
+                  <Label htmlFor="enterprise-scope-tenant">Tenant</Label>
                   <Select
+                    id="enterprise-scope-tenant"
                     value={scopeTenantId || scopeQuery.data?.tenant_id || ''}
                     onChange={(v) => setScopeTenantId(v)}
                     options={[
@@ -954,25 +956,27 @@ function EnterpriseTab() {
           <DialogBody className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Name</Label>
-                <Input value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
+                <Label htmlFor="tenant-name">Name</Label>
+                <Input id="tenant-name" value={tenantForm.name} onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })} />
               </div>
               <div>
-                <Label>Slug</Label>
-                <Input value={tenantForm.slug} onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })} />
+                <Label htmlFor="tenant-slug">Slug</Label>
+                <Input id="tenant-slug" value={tenantForm.slug} onChange={(e) => setTenantForm({ ...tenantForm, slug: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label>Legacy Partner Key</Label>
+              <Label htmlFor="tenant-legacy-partner-key">Legacy Partner Key</Label>
               <Input
+                id="tenant-legacy-partner-key"
                 value={tenantForm.legacy_partner_key}
                 onChange={(e) => setTenantForm({ ...tenantForm, legacy_partner_key: e.target.value })}
                 placeholder="acme-corp"
               />
             </div>
             <div>
-              <Label>Partner Aliases</Label>
+              <Label htmlFor="tenant-partner-aliases">Partner Aliases</Label>
               <Input
+                id="tenant-partner-aliases"
                 value={tenantForm.partner_aliases}
                 onChange={(e) => setTenantForm({ ...tenantForm, partner_aliases: e.target.value })}
                 placeholder="alias-one, alias-two"
@@ -1036,22 +1040,23 @@ function EnterpriseTab() {
           <DialogBody className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Name</Label>
-                <Input value={providerForm.name} onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })} />
+                <Label htmlFor="provider-name">Name</Label>
+                <Input id="provider-name" value={providerForm.name} onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })} />
               </div>
               <div>
-                <Label>Issuer</Label>
-                <Input value={providerForm.issuer} onChange={(e) => setProviderForm({ ...providerForm, issuer: e.target.value })} />
+                <Label htmlFor="provider-issuer">Issuer</Label>
+                <Input id="provider-issuer" value={providerForm.issuer} onChange={(e) => setProviderForm({ ...providerForm, issuer: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Client ID</Label>
-                <Input value={providerForm.client_id} onChange={(e) => setProviderForm({ ...providerForm, client_id: e.target.value })} />
+                <Label htmlFor="provider-client-id">Client ID</Label>
+                <Input id="provider-client-id" value={providerForm.client_id} onChange={(e) => setProviderForm({ ...providerForm, client_id: e.target.value })} />
               </div>
               <div>
-                <Label>Client Secret</Label>
+                <Label htmlFor="provider-client-secret">Client Secret</Label>
                 <Input
+                  id="provider-client-secret"
                   type="password"
                   value={providerForm.client_secret}
                   onChange={(e) => setProviderForm({ ...providerForm, client_secret: e.target.value })}
@@ -1061,31 +1066,32 @@ function EnterpriseTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Authorize URL</Label>
-                <Input value={providerForm.authorize_url} onChange={(e) => setProviderForm({ ...providerForm, authorize_url: e.target.value })} />
+                <Label htmlFor="provider-authorize-url">Authorize URL</Label>
+                <Input id="provider-authorize-url" value={providerForm.authorize_url} onChange={(e) => setProviderForm({ ...providerForm, authorize_url: e.target.value })} />
               </div>
               <div>
-                <Label>Token URL</Label>
-                <Input value={providerForm.token_url} onChange={(e) => setProviderForm({ ...providerForm, token_url: e.target.value })} />
+                <Label htmlFor="provider-token-url">Token URL</Label>
+                <Input id="provider-token-url" value={providerForm.token_url} onChange={(e) => setProviderForm({ ...providerForm, token_url: e.target.value })} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Userinfo URL</Label>
-                <Input value={providerForm.userinfo_url} onChange={(e) => setProviderForm({ ...providerForm, userinfo_url: e.target.value })} />
+                <Label htmlFor="provider-userinfo-url">Userinfo URL</Label>
+                <Input id="provider-userinfo-url" value={providerForm.userinfo_url} onChange={(e) => setProviderForm({ ...providerForm, userinfo_url: e.target.value })} />
               </div>
               <div>
-                <Label>JWKS URI</Label>
-                <Input value={providerForm.jwks_uri} onChange={(e) => setProviderForm({ ...providerForm, jwks_uri: e.target.value })} />
+                <Label htmlFor="provider-jwks-uri">JWKS URI</Label>
+                <Input id="provider-jwks-uri" value={providerForm.jwks_uri} onChange={(e) => setProviderForm({ ...providerForm, jwks_uri: e.target.value })} />
               </div>
             </div>
             <div>
-              <Label>Scope</Label>
-              <Input value={providerForm.scope} onChange={(e) => setProviderForm({ ...providerForm, scope: e.target.value })} />
+              <Label htmlFor="provider-scope">Scope</Label>
+              <Input id="provider-scope" value={providerForm.scope} onChange={(e) => setProviderForm({ ...providerForm, scope: e.target.value })} />
             </div>
             <div>
-              <Label>Extra Config (JSON)</Label>
+              <Label htmlFor="provider-extra-config">Extra Config (JSON)</Label>
               <Textarea
+                id="provider-extra-config"
                 value={providerForm.extra_config}
                 onChange={(e) => setProviderForm({ ...providerForm, extra_config: e.target.value })}
                 rows={4}
@@ -1110,8 +1116,9 @@ function EnterpriseTab() {
           <DialogBody className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Report Type</Label>
+                <Label htmlFor="schedule-report-type">Report Type</Label>
                 <Select
+                  id="schedule-report-type"
                   value={scheduleForm.report_type}
                   onChange={(v) => setScheduleForm({ ...scheduleForm, report_type: v })}
                   options={[
@@ -1122,8 +1129,9 @@ function EnterpriseTab() {
                 />
               </div>
               <div>
-                <Label>Format</Label>
+                <Label htmlFor="schedule-format">Format</Label>
                 <Select
+                  id="schedule-format"
                   value={scheduleForm.format}
                   onChange={(v) => setScheduleForm({ ...scheduleForm, format: v })}
                   options={[
@@ -1137,8 +1145,9 @@ function EnterpriseTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Cadence</Label>
+                <Label htmlFor="schedule-cadence">Cadence</Label>
                 <Select
+                  id="schedule-cadence"
                   value={scheduleForm.cadence}
                   onChange={(v) => setScheduleForm({ ...scheduleForm, cadence: v })}
                   options={[
@@ -1150,8 +1159,9 @@ function EnterpriseTab() {
                 />
               </div>
               <div>
-                <Label>Tenant</Label>
+                <Label htmlFor="schedule-tenant">Tenant</Label>
                 <Select
+                  id="schedule-tenant"
                   value={scheduleForm.tenant_id}
                   onChange={(v) => setScheduleForm({ ...scheduleForm, tenant_id: v })}
                   options={[
@@ -1166,16 +1176,18 @@ function EnterpriseTab() {
               </div>
             </div>
             <div>
-              <Label>Destination Email</Label>
+              <Label htmlFor="schedule-destination-email">Destination Email</Label>
               <Input
+                id="schedule-destination-email"
                 value={scheduleForm.destination_email}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, destination_email: e.target.value })}
                 placeholder="soc@example.com"
               />
             </div>
             <div>
-              <Label>Config (JSON)</Label>
+              <Label htmlFor="schedule-config">Config (JSON)</Label>
               <Textarea
+                id="schedule-config"
                 value={scheduleForm.config}
                 onChange={(e) => setScheduleForm({ ...scheduleForm, config: e.target.value })}
                 rows={3}
