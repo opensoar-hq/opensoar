@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Pagination } from '@/components/ui/Pagination'
 import { PageTransition } from '@/components/ui/PageTransition'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { timeAgo, formatDuration, cn } from '@/lib/utils'
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
@@ -90,19 +91,20 @@ function ExpandedRunDetails({ run }: { run: PlaybookRun }) {
 }
 
 export function RunsListPage() {
+  const { selectedTenantId } = useWorkspace()
   const [filters, setFilters] = useState<{ status?: string; playbook_id?: string }>({})
   const [page, setPage] = useState(0)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const limit = 50
 
   const { data, isLoading } = useQuery({
-    queryKey: ['runs', filters, page],
-    queryFn: () => api.runs.list({ ...filters, limit, offset: page * limit }),
+    queryKey: ['runs', filters, page, selectedTenantId],
+    queryFn: () => api.runs.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
 
   const { data: playbooks } = useQuery({
-    queryKey: ['playbooks'],
-    queryFn: api.playbooks.list,
+    queryKey: ['playbooks', selectedTenantId],
+    queryFn: () => api.playbooks.list(selectedTenantId || undefined),
   })
 
   const playbookMap = new Map<string, string>()
