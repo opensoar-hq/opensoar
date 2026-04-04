@@ -457,6 +457,13 @@ function EnterpriseTab() {
     tenant_id: '',
     config: '{}',
   })
+  const [retentionForm, setRetentionForm] = useState({
+    audit_log_retention_days: '365',
+    report_run_retention_days: '90',
+    auto_apply_enabled: false,
+    notes: '',
+  })
+  const [retentionDirty, setRetentionDirty] = useState(false)
 
   const { data: keys, isLoading: keysLoading } = useQuery({
     queryKey: ['api-keys'],
@@ -468,6 +475,20 @@ function EnterpriseTab() {
     queryFn: api.reportSchedules.list,
     retry: false,
   })
+
+  const retentionQuery = useQuery({
+    queryKey: ['ee-data-retention'],
+    queryFn: api.dataRetention.get,
+    retry: false,
+  })
+  const effectiveRetentionForm = retentionDirty || !retentionQuery.data
+    ? retentionForm
+    : {
+        audit_log_retention_days: retentionQuery.data.audit_log_retention_days?.toString() ?? '',
+        report_run_retention_days: retentionQuery.data.report_run_retention_days?.toString() ?? '',
+        auto_apply_enabled: retentionQuery.data.auto_apply_enabled,
+        notes: retentionQuery.data.notes ?? '',
+      }
 
   const scopeQuery = useQuery({
     queryKey: ['ee-api-key-scope', selectedKeyId],
@@ -542,6 +563,46 @@ function EnterpriseTab() {
     },
     onError: () => {
       toast.error('Failed to delete report schedule')
+    },
+  })
+
+  const updateRetentionMutation = useMutation({
+    mutationFn: () => api.dataRetention.update({
+      audit_log_retention_days: effectiveRetentionForm.audit_log_retention_days.trim()
+        ? Number(effectiveRetentionForm.audit_log_retention_days)
+        : null,
+      report_run_retention_days: effectiveRetentionForm.report_run_retention_days.trim()
+        ? Number(effectiveRetentionForm.report_run_retention_days)
+        : null,
+      auto_apply_enabled: effectiveRetentionForm.auto_apply_enabled,
+      notes: effectiveRetentionForm.notes.trim() || null,
+    }),
+    onSuccess: (data) => {
+      setRetentionForm({
+        audit_log_retention_days: data.audit_log_retention_days?.toString() ?? '',
+        report_run_retention_days: data.report_run_retention_days?.toString() ?? '',
+        auto_apply_enabled: data.auto_apply_enabled,
+        notes: data.notes ?? '',
+      })
+      setRetentionDirty(false)
+      queryClient.invalidateQueries({ queryKey: ['ee-data-retention'] })
+      toast.success('Retention policy saved')
+    },
+    onError: () => {
+      toast.error('Failed to save retention policy')
+    },
+  })
+
+  const runRetentionMutation = useMutation({
+    mutationFn: () => api.dataRetention.enforce(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['ee-data-retention'] })
+      toast.success(
+        `Retention applied (${data.audit_log_entries_deleted} audit entries, ${data.report_runs_cleared} schedule runs)`,
+      )
+    },
+    onError: () => {
+      toast.error('Failed to run retention policy')
     },
   })
 
@@ -896,6 +957,93 @@ function EnterpriseTab() {
           </Card>
         ) : (
           <EmptyState icon={<CalendarDays size={28} />} title="No schedules" description="Create a report schedule to automate exports" />
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-medium text-heading m-0">Data Retention</h3>
+        </div>
+        {retentionQuery.isError ? (
+          <EmptyState
+            icon={<Shield size={28} />}
+            title="Retention management unavailable"
+            description="The enterprise retention endpoints are not available in this deployment."
+          />
+        ) : retentionQuery.isLoading ? (
+          <CardSkeleton lines={2} />
+        ) : (
+          <Card className="p-4 space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="retention-audit-days">Audit Log Retention (Days)</Label>
+                <Input
+                  id="retention-audit-days"
+                  type="number"
+                  min={1}
+                  value={effectiveRetentionForm.audit_log_retention_days}
+                  onChange={(e) => {
+                    setRetentionDirty(true)
+                    setRetentionForm({ ...effectiveRetentionForm, audit_log_retention_days: e.target.value })
+                  }}
+                  placeholder="365"
+                />
+              </div>
+              <div>
+                <Label htmlFor="retention-report-days">Report Run Metadata Retention (Days)</Label>
+                <Input
+                  id="retention-report-days"
+                  type="number"
+                  min={1}
+                  value={effectiveRetentionForm.report_run_retention_days}
+                  onChange={(e) => {
+                    setRetentionDirty(true)
+                    setRetentionForm({ ...effectiveRetentionForm, report_run_retention_days: e.target.value })
+                  }}
+                  placeholder="90"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="retention-notes">Notes</Label>
+              <Textarea
+                id="retention-notes"
+                value={effectiveRetentionForm.notes}
+                onChange={(e) => {
+                  setRetentionDirty(true)
+                  setRetentionForm({ ...effectiveRetentionForm, notes: e.target.value })
+                }}
+                rows={3}
+                placeholder="Document retention rationale or exceptions"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-text">
+              <input
+                type="checkbox"
+                checked={effectiveRetentionForm.auto_apply_enabled}
+                onChange={(e) => {
+                  setRetentionDirty(true)
+                  setRetentionForm({ ...effectiveRetentionForm, auto_apply_enabled: e.target.checked })
+                }}
+              />
+              Automatically enforce on the background worker
+            </label>
+            {retentionQuery.data?.last_enforced_at ? (
+              <div className="text-[11px] text-muted">
+                Last enforced {new Date(retentionQuery.data.last_enforced_at).toLocaleString()}
+              </div>
+            ) : (
+              <div className="text-[11px] text-muted">Retention has not been enforced yet.</div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => runRetentionMutation.mutate()}>
+                Run Enforcement Now
+              </Button>
+              <Button size="sm" variant="primary" onClick={() => updateRetentionMutation.mutate()}>
+                Save Retention Policy
+              </Button>
+            </div>
+          </Card>
         )}
       </div>
 

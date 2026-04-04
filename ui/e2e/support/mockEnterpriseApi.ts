@@ -78,6 +78,16 @@ interface ReportScheduleInfo {
   last_run_detail: string | null
 }
 
+interface DataRetentionPolicyInfo {
+  id: string
+  audit_log_retention_days: number | null
+  report_run_retention_days: number | null
+  auto_apply_enabled: boolean
+  last_enforced_at: string | null
+  last_enforcement_summary: Record<string, unknown> | null
+  notes: string | null
+}
+
 interface MockEnterpriseState {
   authenticated: boolean
   analyst: Analyst | null
@@ -88,6 +98,7 @@ interface MockEnterpriseState {
   tenants: TenantInfo[]
   providers: SSOProviderInfo[]
   schedules: ReportScheduleInfo[]
+  dataRetention: DataRetentionPolicyInfo
 }
 
 interface MockEnterpriseOptions {
@@ -100,6 +111,7 @@ interface MockEnterpriseOptions {
   tenants?: TenantInfo[]
   providers?: SSOProviderInfo[]
   schedules?: ReportScheduleInfo[]
+  dataRetention?: DataRetentionPolicyInfo
 }
 
 const now = '2026-04-04T00:00:00.000Z'
@@ -173,6 +185,15 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
     ],
     providers: options.providers ?? [],
     schedules: options.schedules ?? [],
+    dataRetention: options.dataRetention ?? {
+      id: 'retention-1',
+      audit_log_retention_days: 365,
+      report_run_retention_days: 90,
+      auto_apply_enabled: false,
+      last_enforced_at: null,
+      last_enforcement_summary: null,
+      notes: null,
+    },
   }
 }
 
@@ -397,6 +418,43 @@ export async function mockEnterpriseApi(
         await fulfillJson(route, schedule, 201)
         return
       }
+    }
+
+    if (pathname === '/api/v1/compliance/data-retention') {
+      if (method === 'GET') {
+        await fulfillJson(route, state.dataRetention)
+        return
+      }
+
+      if (method === 'PUT') {
+        const body = requestBody(route)
+        state.dataRetention = {
+          ...state.dataRetention,
+          audit_log_retention_days: typeof body.audit_log_retention_days === 'number' ? body.audit_log_retention_days : null,
+          report_run_retention_days: typeof body.report_run_retention_days === 'number' ? body.report_run_retention_days : null,
+          auto_apply_enabled: Boolean(body.auto_apply_enabled),
+          notes: typeof body.notes === 'string' ? body.notes : null,
+        }
+        await fulfillJson(route, state.dataRetention)
+        return
+      }
+    }
+
+    if (pathname === '/api/v1/compliance/data-retention/enforce' && method === 'POST') {
+      state.dataRetention = {
+        ...state.dataRetention,
+        last_enforced_at: new Date().toISOString(),
+        last_enforcement_summary: {
+          audit_log_entries_deleted: 3,
+          report_runs_cleared: 1,
+        },
+      }
+      await fulfillJson(route, {
+        audit_log_entries_deleted: 3,
+        report_runs_cleared: 1,
+        enforced_at: state.dataRetention.last_enforced_at,
+      })
+      return
     }
 
     if (pathname.startsWith('/api/v1/compliance/reports/schedules/')) {
