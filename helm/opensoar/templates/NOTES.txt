@@ -1,0 +1,11 @@
+OpenSOAR has been installed.
+
+The chart currently assumes a single release per namespace because the UI image proxies /api requests to the in-cluster Service named "api".
+
+To access the UI locally:
+
+  kubectl port-forward svc/ui 3000:{{ .Values.ui.service.port }}
+
+Then open:
+
+  http://127.0.0.1:3000

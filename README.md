@@ -28,6 +28,8 @@ Then open [http://localhost:3000](http://localhost:3000).
 
 Docs: [docs.opensoar.app](https://docs.opensoar.app)
 
+Self-hosted packaging: [deploy/README.md](deploy/README.md)
+
 ---
 
 ## Why OpenSOAR?

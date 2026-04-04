@@ -1,0 +1,6 @@
+apiVersion: v2
+name: opensoar
+description: Helm chart for self-hosted OpenSOAR deployments
+type: application
+version: 0.1.0
+appVersion: "latest"

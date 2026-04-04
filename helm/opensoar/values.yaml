@@ -1,0 +1,76 @@
+images:
+  api:
+    repository: ghcr.io/opensoar-hq/opensoar-core-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  worker:
+    repository: ghcr.io/opensoar-hq/opensoar-core-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  migrate:
+    repository: ghcr.io/opensoar-hq/opensoar-core-migrate
+    tag: latest
+    pullPolicy: IfNotPresent
+  ui:
+    repository: ghcr.io/opensoar-hq/opensoar-core-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  redis:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+
+secrets:
+  postgresPassword: opensoar
+  jwtSecret: change-me
+  apiKeySecret: change-me
+
+api:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8000
+  playbookDirs: /app/playbooks
+  extraEnv: []
+  resources: {}
+
+worker:
+  replicaCount: 1
+  concurrency: 4
+  playbookDirs: /app/playbooks
+  extraEnv: []
+  resources: {}
+
+ui:
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: opensoar.local
+    path: /
+    tls: []
+  resources: {}
+
+postgres:
+  enabled: true
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+  resources: {}
+
+redis:
+  enabled: true
+  service:
+    port: 6379
+  resources: {}
