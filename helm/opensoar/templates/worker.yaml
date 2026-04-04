@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+{{ include "opensoar.labels" . | indent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+{{ include "opensoar.labels" . | indent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.images.worker.repository }}:{{ .Values.images.worker.tag }}"
+          imagePullPolicy: {{ .Values.images.worker.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - opensoar.worker.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency={{ .Values.worker.concurrency | quote }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: redis-url
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: celery-broker-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: jwt-secret
+            - name: API_KEY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: api-key-secret
+            - name: PLAYBOOK_DIRS
+              value: {{ .Values.worker.playbookDirs | quote }}
+{{- if .Values.worker.extraEnv }}
+{{ toYaml .Values.worker.extraEnv | indent 12 }}
+{{- end }}
+          resources:
+{{ toYaml .Values.worker.resources | indent 12 }}
