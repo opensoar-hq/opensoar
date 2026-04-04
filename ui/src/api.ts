@@ -91,6 +91,7 @@ export interface Playbook {
   id: string
   name: string
   description: string | null
+  partner: string | null
   module_path: string
   function_name: string
   trigger_type: string | null
@@ -376,7 +377,7 @@ export const api = {
       postJSON<BulkOperationResult>('/alerts/bulk', data),
   },
   playbooks: {
-    list: () => fetchJSON<Playbook[]>('/playbooks'),
+    list: (tenantId?: string) => fetchJSON<Playbook[]>(`/playbooks${tenantId ? `?tenant_id=${tenantId}` : ''}`),
     get: (id: string) => fetchJSON<Playbook>(`/playbooks/${id}`),
     update: (id: string, data: { enabled?: boolean }) =>
       patchJSON<Playbook>(`/playbooks/${id}`, data),
@@ -384,10 +385,11 @@ export const api = {
       postJSON<{ message: string; celery_task_id: string }>(`/playbooks/${id}/run`, data || {}),
   },
   runs: {
-    list: (params?: { status?: string; playbook_id?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; playbook_id?: string; tenant_id?: string; limit?: number; offset?: number }) => {
       const sp = new URLSearchParams()
       if (params?.status) sp.set('status', params.status)
       if (params?.playbook_id) sp.set('playbook_id', params.playbook_id)
+      if (params?.tenant_id) sp.set('tenant_id', params.tenant_id)
       if (params?.limit) sp.set('limit', String(params.limit))
       if (params?.offset) sp.set('offset', String(params.offset))
       const qs = sp.toString()
@@ -429,10 +431,11 @@ export const api = {
       patchJSON<Analyst>(`/auth/analysts/${id}`, data),
   },
   incidents: {
-    list: (params?: { status?: string; severity?: string; limit?: number; offset?: number }) => {
+    list: (params?: { status?: string; severity?: string; tenant_id?: string; limit?: number; offset?: number }) => {
       const qs = new URLSearchParams()
       if (params?.status) qs.set('status', params.status)
       if (params?.severity) qs.set('severity', params.severity)
+      if (params?.tenant_id) qs.set('tenant_id', params.tenant_id)
       if (params?.limit) qs.set('limit', String(params.limit))
       if (params?.offset) qs.set('offset', String(params.offset))
       const q = qs.toString()

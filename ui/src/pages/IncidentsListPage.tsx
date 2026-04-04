@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
 import { PageTransition } from '@/components/ui/PageTransition'
 import { useToast } from '@/components/ui/Toast'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { timeAgo } from '@/lib/utils'
 
 function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -103,14 +104,15 @@ function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () =>
 
 export function IncidentsListPage() {
   const navigate = useNavigate()
+  const { selectedTenantId } = useWorkspace()
   const [filters, setFilters] = useState<{ severity?: string; status?: string }>({})
   const [page, setPage] = useState(0)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const limit = 50
 
   const { data, isLoading } = useQuery({
-    queryKey: ['incidents', filters, page],
-    queryFn: () => api.incidents.list({ ...filters, limit, offset: page * limit }),
+    queryKey: ['incidents', filters, page, selectedTenantId],
+    queryFn: () => api.incidents.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
 
   const incidents = data?.incidents ?? []

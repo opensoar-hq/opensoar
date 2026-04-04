@@ -251,6 +251,56 @@ export async function mockEnterpriseApi(
       return
     }
 
+    if (method === 'GET' && pathname === '/api/v1/playbooks') {
+      const tenantId = new URL(request.url()).searchParams.get('tenant_id')
+      const playbooks = tenantId === 'tenant-1'
+        ? [
+            {
+              id: 'playbook-1',
+              name: 'Northwind Playbook',
+              description: null,
+              partner: 'northwind',
+              module_path: 'playbooks.northwind',
+              function_name: 'run',
+              trigger_type: 'webhook',
+              trigger_config: {},
+              enabled: true,
+              version: 1,
+              created_at: now,
+            },
+          ]
+        : [
+            {
+              id: 'playbook-1',
+              name: 'Northwind Playbook',
+              description: null,
+              partner: 'northwind',
+              module_path: 'playbooks.northwind',
+              function_name: 'run',
+              trigger_type: 'webhook',
+              trigger_config: {},
+              enabled: true,
+              version: 1,
+              created_at: now,
+            },
+            {
+              id: 'playbook-2',
+              name: 'Global Playbook',
+              description: null,
+              partner: null,
+              module_path: 'playbooks.global',
+              function_name: 'run',
+              trigger_type: 'webhook',
+              trigger_config: {},
+              enabled: true,
+              version: 1,
+              created_at: now,
+            },
+          ]
+      await fulfillJson(route, playbooks)
+      return
+    }
+
     if (method === 'GET' && pathname === '/api/v1/dashboard/stats') {
       const tenantId = new URL(request.url()).searchParams.get('tenant_id')
       const partner = tenantId === 'tenant-1' ? 'Northwind Operations' : 'All Partners'
@@ -273,6 +323,106 @@ export async function mockEnterpriseApi(
         recent_alerts: [],
         recent_runs: [],
       })
+      return
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/incidents') {
+      const tenantId = new URL(request.url()).searchParams.get('tenant_id')
+      const incidents = tenantId === 'tenant-1'
+        ? [
+            {
+              id: 'incident-1',
+              title: 'Northwind Workspace Incident',
+              description: null,
+              severity: 'high',
+              status: 'open',
+              assigned_to: null,
+              assigned_username: null,
+              tags: null,
+              alert_count: 1,
+              closed_at: null,
+              created_at: now,
+              updated_at: now,
+            },
+          ]
+        : [
+            {
+              id: 'incident-1',
+              title: 'Northwind Workspace Incident',
+              description: null,
+              severity: 'high',
+              status: 'open',
+              assigned_to: null,
+              assigned_username: null,
+              tags: null,
+              alert_count: 1,
+              closed_at: null,
+              created_at: now,
+              updated_at: now,
+            },
+            {
+              id: 'incident-2',
+              title: 'Global Incident',
+              description: null,
+              severity: 'medium',
+              status: 'open',
+              assigned_to: null,
+              assigned_username: null,
+              tags: null,
+              alert_count: 2,
+              closed_at: null,
+              created_at: now,
+              updated_at: now,
+            },
+          ]
+      await fulfillJson(route, { incidents, total: incidents.length })
+      return
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/runs') {
+      const tenantId = new URL(request.url()).searchParams.get('tenant_id')
+      const runs = tenantId === 'tenant-1'
+        ? [
+            {
+              id: 'run-1',
+              playbook_id: 'playbook-1',
+              alert_id: 'alert-1',
+              status: 'completed',
+              started_at: now,
+              finished_at: now,
+              error: null,
+              result: {},
+              action_results: [],
+              created_at: now,
+            },
+          ]
+        : [
+            {
+              id: 'run-1',
+              playbook_id: 'playbook-1',
+              alert_id: 'alert-1',
+              status: 'completed',
+              started_at: now,
+              finished_at: now,
+              error: null,
+              result: {},
+              action_results: [],
+              created_at: now,
+            },
+            {
+              id: 'run-2',
+              playbook_id: 'playbook-2',
+              alert_id: 'alert-2',
+              status: 'failed',
+              started_at: now,
+              finished_at: now,
+              error: 'boom',
+              result: {},
+              action_results: [],
+              created_at: now,
+            },
+          ]
+      await fulfillJson(route, { runs, total: runs.length })
       return
     }
 

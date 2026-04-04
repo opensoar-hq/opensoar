@@ -148,3 +148,17 @@ test('selects a workspace from the sidebar switcher', async ({ page }) => {
   await page.getByLabel('Workspace').selectOption('tenant-1')
   await expect(page.getByLabel('Workspace')).toHaveValue('tenant-1')
 })
+
+test('applies workspace selection to incidents and runs pages', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+  await page.getByLabel('Workspace').selectOption('tenant-1')
+
+  await page.goto('/incidents')
+  await expect(page.getByText('Northwind Workspace Incident')).toBeVisible()
+  await expect(page.getByText('Global Incident')).toHaveCount(0)
+
+  await page.goto('/runs')
+  await expect(page.getByRole('button', { name: /Northwind Playbook/ })).toBeVisible()
+  await expect(page.getByText('Global Playbook')).toHaveCount(0)
+})
