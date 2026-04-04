@@ -5,9 +5,10 @@ import uuid
 
 
 class TestIntegrationCRUD:
-    async def test_create_integration(self, client, registered_analyst):
+    async def test_create_integration(self, client, registered_admin):
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "virustotal",
                 "name": "VT Production",
@@ -21,15 +22,16 @@ class TestIntegrationCRUD:
         assert data["enabled"] is True
         assert data["health_status"] is None
 
-    async def test_list_integrations(self, client):
-        resp = await client.get("/api/v1/integrations")
+    async def test_list_integrations(self, client, registered_analyst):
+        resp = await client.get("/api/v1/integrations", headers=registered_analyst["headers"])
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
-    async def test_get_integration(self, client):
+    async def test_get_integration(self, client, registered_admin, registered_analyst):
         # Create one first
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "slack",
                 "name": "Slack SOC",
@@ -38,17 +40,18 @@ class TestIntegrationCRUD:
         )
         integration_id = resp.json()["id"]
 
-        resp = await client.get(f"/api/v1/integrations/{integration_id}")
+        resp = await client.get(f"/api/v1/integrations/{integration_id}", headers=registered_analyst["headers"])
         assert resp.status_code == 200
         assert resp.json()["name"] == "Slack SOC"
 
-    async def test_get_nonexistent(self, client):
-        resp = await client.get(f"/api/v1/integrations/{uuid.uuid4()}")
+    async def test_get_nonexistent(self, client, registered_analyst):
+        resp = await client.get(f"/api/v1/integrations/{uuid.uuid4()}", headers=registered_analyst["headers"])
         assert resp.status_code == 404
 
-    async def test_update_integration(self, client):
+    async def test_update_integration(self, client, registered_admin):
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "abuseipdb",
                 "name": "AbuseIPDB",
@@ -59,14 +62,16 @@ class TestIntegrationCRUD:
 
         resp = await client.patch(
             f"/api/v1/integrations/{integration_id}",
+            headers=registered_admin["headers"],
             json={"enabled": False},
         )
         assert resp.status_code == 200
         assert resp.json()["enabled"] is False
 
-    async def test_delete_integration(self, client):
+    async def test_delete_integration(self, client, registered_admin):
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "email",
                 "name": "SMTP",
@@ -75,18 +80,19 @@ class TestIntegrationCRUD:
         )
         integration_id = resp.json()["id"]
 
-        resp = await client.delete(f"/api/v1/integrations/{integration_id}")
+        resp = await client.delete(f"/api/v1/integrations/{integration_id}", headers=registered_admin["headers"])
         assert resp.status_code == 200
 
-        resp = await client.get(f"/api/v1/integrations/{integration_id}")
+        resp = await client.get(f"/api/v1/integrations/{integration_id}", headers=registered_admin["headers"])
         assert resp.status_code == 404
 
 
 class TestIntegrationHealthCheck:
-    async def test_health_check_unknown_type(self, client):
+    async def test_health_check_unknown_type(self, client, registered_admin):
         """Health check on an integration with unknown type returns an error status."""
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "unknown_vendor",
                 "name": "Unknown",
@@ -95,16 +101,17 @@ class TestIntegrationHealthCheck:
         )
         integration_id = resp.json()["id"]
 
-        resp = await client.post(f"/api/v1/integrations/{integration_id}/health")
+        resp = await client.post(f"/api/v1/integrations/{integration_id}/health", headers=registered_admin["headers"])
         assert resp.status_code == 200
         data = resp.json()
         assert data["healthy"] is False
         assert "unknown" in data["message"].lower() or "not supported" in data["message"].lower()
 
-    async def test_health_check_updates_model(self, client):
+    async def test_health_check_updates_model(self, client, registered_admin):
         """Health check should update health_status and last_health_check on the integration."""
         resp = await client.post(
             "/api/v1/integrations",
+            headers=registered_admin["headers"],
             json={
                 "integration_type": "unknown_vendor",
                 "name": "Health Track",
@@ -113,13 +120,13 @@ class TestIntegrationHealthCheck:
         )
         integration_id = resp.json()["id"]
 
-        await client.post(f"/api/v1/integrations/{integration_id}/health")
+        await client.post(f"/api/v1/integrations/{integration_id}/health", headers=registered_admin["headers"])
 
-        resp = await client.get(f"/api/v1/integrations/{integration_id}")
+        resp = await client.get(f"/api/v1/integrations/{integration_id}", headers=registered_admin["headers"])
         data = resp.json()
         assert data["health_status"] is not None
         assert data["last_health_check"] is not None
 
-    async def test_health_check_nonexistent(self, client):
-        resp = await client.post(f"/api/v1/integrations/{uuid.uuid4()}/health")
+    async def test_health_check_nonexistent(self, client, registered_admin):
+        resp = await client.post(f"/api/v1/integrations/{uuid.uuid4()}/health", headers=registered_admin["headers"])
         assert resp.status_code == 404

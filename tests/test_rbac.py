@@ -34,6 +34,20 @@ class TestRolePermissions:
         assert not has_permission("viewer", Permission.INCIDENTS_CREATE)
         assert not has_permission("viewer", Permission.PLAYBOOKS_MANAGE)
 
+    def test_tenant_admin_can_manage_playbooks_and_integrations(self):
+        assert has_permission("tenant_admin", Permission.PLAYBOOKS_MANAGE)
+        assert has_permission("tenant_admin", Permission.INTEGRATIONS_MANAGE)
+        assert has_permission("tenant_admin", Permission.INCIDENTS_UPDATE)
+        assert not has_permission("tenant_admin", Permission.ANALYSTS_MANAGE)
+
+    def test_playbook_author_has_narrower_authoring_permissions(self):
+        assert has_permission("playbook_author", Permission.PLAYBOOKS_READ)
+        assert has_permission("playbook_author", Permission.PLAYBOOKS_MANAGE)
+        assert has_permission("playbook_author", Permission.PLAYBOOKS_EXECUTE)
+        assert has_permission("playbook_author", Permission.INTEGRATIONS_READ)
+        assert not has_permission("playbook_author", Permission.INTEGRATIONS_MANAGE)
+        assert not has_permission("playbook_author", Permission.INCIDENTS_UPDATE)
+
     def test_unknown_role_has_no_permissions(self):
         assert not has_permission("nonexistent", Permission.ALERTS_READ)
 

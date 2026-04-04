@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import create_access_token, require_analyst
+from opensoar.auth.rbac import VALID_ANALYST_ROLES
 from opensoar.models.analyst import Analyst
 from opensoar.plugins import dispatch_audit_event, get_auth_capabilities
 from opensoar.schemas.audit import AuditEvent
@@ -28,6 +29,15 @@ def _hash_password(password: str) -> str:
 
 def _verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode(), hashed.encode())
+
+
+def _validate_role(role: str) -> str:
+    if role not in VALID_ANALYST_ROLES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid role. Must be one of: {', '.join(VALID_ANALYST_ROLES)}",
+        )
+    return role
 
 
 @router.get("/capabilities", response_model=AuthCapabilitiesResponse)
@@ -55,7 +65,7 @@ async def register(
         display_name=body.display_name,
         email=body.email,
         password_hash=_hash_password(body.password),
-        role=body.role,
+        role=_validate_role(body.role),
     )
     session.add(analyst)
     await session.commit()
@@ -159,6 +169,8 @@ async def update_analyst(
         raise HTTPException(status_code=404, detail="Analyst not found")
 
     update_data = body.model_dump(exclude_unset=True)
+    if "role" in update_data:
+        update_data["role"] = _validate_role(update_data["role"])
     for field, value in update_data.items():
         setattr(analyst, field, value)
 

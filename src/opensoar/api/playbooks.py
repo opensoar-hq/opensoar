@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
-from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.rbac import Permission, require_permission
 from opensoar.core.decorators import get_playbook_registry
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
@@ -22,7 +22,7 @@ router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 async def list_playbooks(
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_READ)),
 ):
     query = select(PlaybookDefinition).order_by(PlaybookDefinition.name)
     query = await apply_tenant_access_query(
@@ -44,7 +44,7 @@ async def get_playbook(
     playbook_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_READ)),
 ):
     result = await session.execute(
         select(PlaybookDefinition).where(PlaybookDefinition.id == playbook_id)
@@ -70,7 +70,7 @@ async def update_playbook(
     update: PlaybookUpdate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_MANAGE)),
 ):
     result = await session.execute(
         select(PlaybookDefinition).where(PlaybookDefinition.id == playbook_id)
@@ -103,7 +103,7 @@ async def run_playbook(
     run_request: PlaybookRunRequest | None = None,
     request: Request = None,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_EXECUTE)),
 ):
     result = await session.execute(
         select(PlaybookDefinition).where(PlaybookDefinition.id == playbook_id)

@@ -130,3 +130,13 @@ test('updates retention policy from enterprise settings', async ({ page }) => {
 
   await expect(page.getByText(/Last enforced/)).toBeVisible()
 })
+
+test('updates an analyst role to playbook author', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+  await page.getByRole('button', { name: 'Analysts' }).click()
+
+  const roleSelect = page.locator('select').first()
+  await roleSelect.selectOption('playbook_author')
+  await expect(roleSelect).toHaveValue('playbook_author')
+})

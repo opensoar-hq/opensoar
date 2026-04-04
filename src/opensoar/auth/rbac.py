@@ -66,7 +66,34 @@ ROLE_PERMISSIONS: dict[str, set[Permission]] = {
         Permission.INTEGRATIONS_READ,
         Permission.OBSERVABLES_READ,
     },
+    "tenant_admin": {
+        Permission.ALERTS_READ,
+        Permission.ALERTS_UPDATE,
+        Permission.ALERTS_DELETE,
+        Permission.INCIDENTS_READ,
+        Permission.INCIDENTS_CREATE,
+        Permission.INCIDENTS_UPDATE,
+        Permission.PLAYBOOKS_READ,
+        Permission.PLAYBOOKS_MANAGE,
+        Permission.PLAYBOOKS_EXECUTE,
+        Permission.INTEGRATIONS_READ,
+        Permission.INTEGRATIONS_MANAGE,
+        Permission.OBSERVABLES_READ,
+        Permission.OBSERVABLES_MANAGE,
+        Permission.AI_USE,
+    },
+    "playbook_author": {
+        Permission.ALERTS_READ,
+        Permission.INCIDENTS_READ,
+        Permission.PLAYBOOKS_READ,
+        Permission.PLAYBOOKS_MANAGE,
+        Permission.PLAYBOOKS_EXECUTE,
+        Permission.INTEGRATIONS_READ,
+        Permission.OBSERVABLES_READ,
+    },
 }
+
+VALID_ANALYST_ROLES = tuple(ROLE_PERMISSIONS.keys())
 
 
 def has_permission(role: str, permission: Permission) -> bool:

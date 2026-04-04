@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
-from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.rbac import Permission, require_permission
 from opensoar.integrations.loader import IntegrationLoader
 from opensoar.models.analyst import Analyst
 from opensoar.models.integration import IntegrationInstance
@@ -45,7 +45,7 @@ async def list_available_types():
 async def list_integrations(
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_READ)),
 ):
     query = select(IntegrationInstance).order_by(IntegrationInstance.name)
     query = await apply_tenant_access_query(
@@ -67,7 +67,7 @@ async def create_integration(
     data: IntegrationCreate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_MANAGE)),
 ):
     integration = IntegrationInstance(
         integration_type=data.integration_type,
@@ -96,7 +96,7 @@ async def get_integration(
     integration_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_READ)),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -122,7 +122,7 @@ async def update_integration(
     update: IntegrationUpdate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_MANAGE)),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -154,7 +154,7 @@ async def delete_integration(
     integration_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_MANAGE)),
 ):
     result = await session.execute(
         select(IntegrationInstance).where(IntegrationInstance.id == integration_id)
@@ -182,7 +182,7 @@ async def check_integration_health(
     integration_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INTEGRATIONS_MANAGE)),
 ):
     """Run a health check on an integration and persist the result."""
     result = await session.execute(

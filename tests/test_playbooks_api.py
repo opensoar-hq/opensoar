@@ -88,12 +88,12 @@ class TestPlaybookEnableDisable:
 class TestPlaybookAPI:
     """Integration tests for playbook CRUD endpoints."""
 
-    async def test_list_playbooks(self, client):
-        resp = await client.get("/api/v1/playbooks")
+    async def test_list_playbooks(self, client, registered_analyst):
+        resp = await client.get("/api/v1/playbooks", headers=registered_analyst["headers"])
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
-    async def test_update_playbook_enabled(self, client, db_session_factory):
+    async def test_update_playbook_enabled(self, client, db_session_factory, registered_admin):
         """PATCH /playbooks/{id} should toggle enabled field."""
         from opensoar.models.playbook import PlaybookDefinition
 
@@ -114,6 +114,7 @@ class TestPlaybookAPI:
         # Disable via API
         resp = await client.patch(
             f"/api/v1/playbooks/{pb_id}",
+            headers=registered_admin["headers"],
             json={"enabled": False},
         )
         assert resp.status_code == 200
@@ -122,6 +123,7 @@ class TestPlaybookAPI:
         # Re-enable
         resp = await client.patch(
             f"/api/v1/playbooks/{pb_id}",
+            headers=registered_admin["headers"],
             json={"enabled": True},
         )
         assert resp.status_code == 200
