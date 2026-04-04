@@ -10,6 +10,7 @@ class PlaybookDefinition(Base):
 
     name: Mapped[str] = mapped_column(String(255), unique=True)
     description: Mapped[str | None] = mapped_column(Text)
+    partner: Mapped[str | None] = mapped_column(String(100))
     module_path: Mapped[str] = mapped_column(String(500))
     function_name: Mapped[str] = mapped_column(String(255))
     trigger_type: Mapped[str | None] = mapped_column(String(50))
