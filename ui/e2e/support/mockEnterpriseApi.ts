@@ -19,6 +19,7 @@ interface Analyst {
   display_name: string
   email: string | null
   is_active: boolean
+  has_local_password: boolean
   role: string
   created_at: string
 }
@@ -175,6 +176,7 @@ const defaultAdmin: Analyst = {
   display_name: 'Admin Analyst',
   email: 'admin@opensoar.app',
   is_active: true,
+  has_local_password: true,
   role: 'admin',
   created_at: now,
 }
@@ -185,6 +187,7 @@ const defaultAnalyst: Analyst = {
   display_name: 'Standard Analyst',
   email: 'analyst@opensoar.app',
   is_active: true,
+  has_local_password: true,
   role: 'analyst',
   created_at: now,
 }
@@ -209,7 +212,7 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
 
   return {
     authenticated: options.authenticated ?? true,
-    analyst: options.analyst ?? defaultAdmin,
+    analyst: options.analyst ?? { ...defaultAdmin },
     authCapabilities: options.authCapabilities ?? {
       local_login_enabled: true,
       local_registration_enabled: false,
@@ -222,7 +225,7 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
       { id: 'tenant_admin', label: 'Tenant Admin' },
       { id: 'playbook_author', label: 'Playbook Author' },
     ],
-    analysts: options.analysts ?? [defaultAdmin, defaultAnalyst],
+    analysts: options.analysts ?? [{ ...defaultAdmin }, { ...defaultAnalyst }],
     integrations: options.integrations ?? [
       {
         id: 'integration-1',
@@ -351,6 +354,11 @@ export async function mockEnterpriseApi(
       return
     }
 
+    if (method === 'POST' && pathname === '/api/v1/auth/change-password') {
+      await fulfillJson(route, { detail: 'Password updated' })
+      return
+    }
+
     if (method === 'GET' && pathname === '/api/v1/auth/roles') {
       await fulfillJson(route, state.analystRoles)
       return
@@ -364,6 +372,7 @@ export async function mockEnterpriseApi(
         display_name: String(body.display_name ?? body.username ?? ''),
         email: typeof body.email === 'string' ? body.email : null,
         is_active: true,
+        has_local_password: true,
         role: typeof body.role === 'string' ? body.role : 'analyst',
         created_at: now,
       }
@@ -564,6 +573,11 @@ export async function mockEnterpriseApi(
           is_active: typeof body.is_active === 'boolean' ? body.is_active : analyst.is_active,
         })
         await fulfillJson(route, analyst)
+        return
+      }
+
+      if (method === 'POST' && pathname.endsWith('/reset-password')) {
+        await fulfillJson(route, { detail: 'Password reset' })
         return
       }
     }

@@ -15,3 +15,7 @@ class Analyst(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String(50), default="analyst")
+
+    @property
+    def has_local_password(self) -> bool:
+        return self.password_hash is not None

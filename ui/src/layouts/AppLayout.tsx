@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
+import { useMutation } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Shield, Play, BookOpen, Briefcase, Settings,
-  LogOut, User, ShieldCheck,
+  LogOut, User, ShieldCheck, KeyRound,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { api } from '@/api'
 import {
   Sidebar,
   SidebarBody,
@@ -15,7 +17,11 @@ import {
   SidebarLabel,
   useSidebar,
 } from '@/components/ui/Sidebar'
+import { Button } from '@/components/ui/Button'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/Dialog'
+import { Input, Label } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
+import { useToast } from '@/components/ui/Toast'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} />, end: true },
@@ -26,9 +32,29 @@ const navItems = [
 ]
 
 function SidebarContent() {
-  const { analyst, logout } = useAuth()
+  const { analyst, authCapabilities, logout } = useAuth()
   const { tenants, selectedTenantId, setSelectedTenantId } = useWorkspace()
   const { open, animate } = useSidebar()
+  const toast = useToast()
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => api.auth.changePassword({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+    onSuccess: () => {
+      setShowPasswordDialog(false)
+      setCurrentPassword('')
+      setNewPassword('')
+      toast.success('Password updated')
+    },
+    onError: () => {
+      toast.error('Failed to update password')
+    },
+  })
 
   return (
     <>
@@ -124,12 +150,62 @@ function SidebarContent() {
           </motion.div>
         </div>
         <SidebarLink
+          icon={<KeyRound size={16} />}
+          label="Change password"
+          onClick={() => setShowPasswordDialog(true)}
+          className="text-muted hover:text-heading"
+        />
+        <SidebarLink
           icon={<LogOut size={16} />}
           label="Sign out"
           onClick={logout}
           className="text-muted hover:text-danger"
         />
       </div>
+
+      <Dialog open={showPasswordDialog} onClose={() => setShowPasswordDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowPasswordDialog(false)}>
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="text-xs text-muted">
+              {authCapabilities.local_login_enabled
+                ? 'Update the local password for this account.'
+                : 'Local password login is disabled in this deployment.'}
+            </div>
+            <div>
+              <Label htmlFor="current-password">Current Password</Label>
+              <Input
+                id="current-password"
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="new-password">New Password</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowPasswordDialog(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => changePasswordMutation.mutate()}
+              disabled={!authCapabilities.local_login_enabled || !currentPassword || !newPassword}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

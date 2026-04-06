@@ -382,6 +382,8 @@ function AnalystsTab() {
     password: '',
     role: 'analyst',
   })
+  const [resetTarget, setResetTarget] = useState<{ id: string; name: string } | null>(null)
+  const [resetPassword, setResetPassword] = useState('')
 
   const { data: analysts, isLoading } = useQuery({
     queryKey: ['analysts'],
@@ -428,6 +430,21 @@ function AnalystsTab() {
     },
     onError: () => {
       toast.error('Failed to update analyst')
+    },
+  })
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: () => {
+      if (!resetTarget) throw new Error('Missing reset target')
+      return api.analysts.resetPassword(resetTarget.id, { new_password: resetPassword })
+    },
+    onSuccess: () => {
+      setResetTarget(null)
+      setResetPassword('')
+      toast.success('Password reset')
+    },
+    onError: () => {
+      toast.error('Failed to reset password')
     },
   })
 
@@ -525,6 +542,39 @@ function AnalystsTab() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={resetTarget !== null} onClose={() => setResetTarget(null)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setResetTarget(null)}>
+            <DialogTitle>Reset Password</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="text-xs text-muted">
+              Set a new password for {resetTarget?.name ?? 'this analyst'}.
+            </div>
+            <div>
+              <Label htmlFor="reset-analyst-password">New Password</Label>
+              <Input
+                id="reset-analyst-password"
+                type="password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setResetTarget(null)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => resetPasswordMutation.mutate()}
+              disabled={!resetTarget || !resetPassword}
+            >
+              Reset
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {analysts && analysts.length > 0 ? (
         <Card>
           {analysts.map((a) => (
@@ -542,6 +592,22 @@ function AnalystsTab() {
               <span className={`text-[11px] px-2 py-0.5 rounded ${a.is_active ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
                 {a.is_active ? 'Active' : 'Inactive'}
               </span>
+              {a.has_local_password ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setResetPassword('')
+                    setResetTarget({ id: a.id, name: a.display_name })
+                  }}
+                >
+                  Reset Password
+                </Button>
+              ) : (
+                <span className="text-[11px] px-2 py-0.5 rounded bg-muted/15 text-muted">
+                  External auth
+                </span>
+              )}
               <Button
                 size="sm"
                 variant="ghost"

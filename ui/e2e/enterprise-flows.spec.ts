@@ -141,6 +141,28 @@ test('updates an analyst role to playbook author', async ({ page }) => {
   await expect(roleSelect).toHaveValue('playbook_author')
 })
 
+test('resets an analyst password from the analysts tab', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+  await page.getByRole('button', { name: 'Analysts' }).click()
+
+  await page.getByRole('button', { name: 'Reset Password' }).first().click()
+  await expect(page.getByRole('heading', { name: 'Reset Password' })).toBeVisible()
+  await page.getByLabel('New Password').fill('new-password')
+  await page.getByRole('button', { name: 'Reset', exact: true }).click()
+})
+
+test('changes the signed-in user password from the sidebar', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/settings')
+
+  await page.getByRole('button', { name: 'Change password' }).click()
+  await expect(page.getByRole('heading', { name: 'Change Password' })).toBeVisible()
+  await page.getByLabel('Current Password').fill('old-password')
+  await page.getByLabel('New Password').fill('new-password')
+  await page.getByRole('button', { name: 'Save' }).click()
+})
+
 test('selects a workspace from the sidebar switcher', async ({ page }) => {
   await mockEnterpriseApi(page)
   await page.goto('/settings')
@@ -168,7 +190,7 @@ test('assigns ownership to a global playbook', async ({ page }) => {
   await page.goto('/playbooks')
 
   await expect(page.getByText('Global Playbook')).toBeVisible()
-  await page.getByLabel('Assign owner').nth(1).selectOption('northwind')
+  await page.getByLabel('Assign owner').first().selectOption('northwind')
   await expect(page.getByText('Owner: northwind')).toBeVisible()
 })
 
@@ -192,6 +214,7 @@ test('tenant admin only sees enterprise settings tab', async ({ page }) => {
       display_name: 'Tenant Admin',
       email: 'tenantadmin@example.com',
       is_active: true,
+      has_local_password: true,
       role: 'tenant_admin',
       created_at: '2026-04-04T00:00:00.000Z',
     },

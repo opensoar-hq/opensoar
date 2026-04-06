@@ -249,6 +249,151 @@ class TestLogin:
         assert seen[0].action == "analyst.logged_in"
 
 
+class TestPasswordManagement:
+    async def test_analyst_can_change_own_password(self, client):
+        username = f"changepw_{uuid.uuid4().hex[:8]}"
+        reg = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": username,
+                "display_name": "Change Password User",
+                "password": "old-password",
+            },
+        )
+        headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+        change = await client.post(
+            "/api/v1/auth/change-password",
+            headers=headers,
+            json={"current_password": "old-password", "new_password": "new-password"},
+        )
+        assert change.status_code == 200
+        assert change.json()["detail"] == "Password updated"
+
+        old_login = await client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "old-password"},
+        )
+        assert old_login.status_code == 401
+
+        new_login = await client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "new-password"},
+        )
+        assert new_login.status_code == 200
+
+    async def test_change_password_rejects_wrong_current_password(self, client):
+        reg = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": f"wrong_current_{uuid.uuid4().hex[:8]}",
+                "display_name": "Wrong Current Password User",
+                "password": "old-password",
+            },
+        )
+        headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            headers=headers,
+            json={"current_password": "not-it", "new_password": "new-password"},
+        )
+        assert resp.status_code == 401
+
+    async def test_change_password_rejects_sso_only_account(self, client, session):
+        from opensoar.models.analyst import Analyst
+
+        analyst = Analyst(
+            username=f"sso_change_{uuid.uuid4().hex[:8]}",
+            display_name="SSO Change Password",
+            email="sso-change@opensoar.app",
+            password_hash=None,
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.commit()
+
+        token = create_access_token(analyst.id, analyst.username)
+        resp = await client.post(
+            "/api/v1/auth/change-password",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"current_password": "old-password", "new_password": "new-password"},
+        )
+        assert resp.status_code == 400
+
+    async def test_admin_can_reset_another_analyst_password(self, client, registered_admin):
+        username = f"reset_target_{uuid.uuid4().hex[:8]}"
+        create = await client.post(
+            "/api/v1/auth/analysts",
+            headers=registered_admin["headers"],
+            json={
+                "username": username,
+                "display_name": "Reset Target",
+                "password": "old-password",
+            },
+        )
+        analyst_id = create.json()["id"]
+
+        reset = await client.post(
+            f"/api/v1/auth/analysts/{analyst_id}/reset-password",
+            headers=registered_admin["headers"],
+            json={"new_password": "new-password"},
+        )
+        assert reset.status_code == 200
+        assert reset.json()["detail"] == "Password reset"
+
+        old_login = await client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "old-password"},
+        )
+        assert old_login.status_code == 401
+
+        new_login = await client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "new-password"},
+        )
+        assert new_login.status_code == 200
+
+    async def test_non_admin_cannot_reset_another_analyst_password(self, client, registered_admin, registered_analyst):
+        create = await client.post(
+            "/api/v1/auth/analysts",
+            headers=registered_admin["headers"],
+            json={
+                "username": f"blocked_reset_{uuid.uuid4().hex[:8]}",
+                "display_name": "Blocked Reset",
+                "password": "old-password",
+            },
+        )
+        analyst_id = create.json()["id"]
+
+        resp = await client.post(
+            f"/api/v1/auth/analysts/{analyst_id}/reset-password",
+            headers=registered_analyst["headers"],
+            json={"new_password": "new-password"},
+        )
+        assert resp.status_code == 403
+
+    async def test_admin_reset_rejects_sso_only_account(self, client, registered_admin, session):
+        from opensoar.models.analyst import Analyst
+
+        analyst = Analyst(
+            username=f"sso_reset_{uuid.uuid4().hex[:8]}",
+            display_name="SSO Reset Password",
+            email="sso-reset@opensoar.app",
+            password_hash=None,
+            role="analyst",
+        )
+        session.add(analyst)
+        await session.commit()
+
+        resp = await client.post(
+            f"/api/v1/auth/analysts/{analyst.id}/reset-password",
+            headers=registered_admin["headers"],
+            json={"new_password": "new-password"},
+        )
+        assert resp.status_code == 400
+
+
 # ── /me endpoint ────────────────────────────────────────────
 
 

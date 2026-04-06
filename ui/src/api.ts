@@ -158,6 +158,7 @@ export interface Analyst {
   display_name: string
   email: string | null
   is_active: boolean
+  has_local_password: boolean
   role: string
   created_at: string
 }
@@ -363,6 +364,8 @@ export const api = {
     me: () => fetchJSON<Analyst>('/auth/me'),
     capabilities: () => fetchJSON<AuthCapabilities>('/auth/capabilities'),
     roles: () => fetchJSON<AnalystRole[]>('/auth/roles'),
+    changePassword: (data: { current_password: string; new_password: string }) =>
+      postJSON<{ detail: string }>('/auth/change-password', data),
   },
   webhooks: {
     createAlert: (payload: Record<string, unknown>) =>
@@ -450,6 +453,8 @@ export const api = {
       postJSON<Analyst>('/auth/analysts', data),
     update: (id: string, data: { display_name?: string; email?: string; is_active?: boolean; role?: string }) =>
       patchJSON<Analyst>(`/auth/analysts/${id}`, data),
+    resetPassword: (id: string, data: { new_password: string }) =>
+      postJSON<{ detail: string }>(`/auth/analysts/${id}/reset-password`, data),
   },
   incidents: {
     list: (params?: { status?: string; severity?: string; tenant_id?: string; limit?: number; offset?: number }) => {

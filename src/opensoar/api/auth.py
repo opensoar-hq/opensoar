@@ -19,6 +19,8 @@ from opensoar.schemas.analyst import (
     AnalystRoleResponse,
     AnalystResponse,
     AnalystUpdate,
+    PasswordChangeRequest,
+    PasswordResetRequest,
     TokenResponse,
 )
 
@@ -51,6 +53,12 @@ def _validate_assignable_role(request: Request, role: str) -> str:
             detail=f"Role '{role}' is not available in this deployment",
         )
     return role
+
+
+def _require_local_password(analyst: Analyst) -> str:
+    if not analyst.password_hash:
+        raise HTTPException(status_code=400, detail="Local password is not configured for this account")
+    return analyst.password_hash
 
 
 async def _assert_not_last_active_admin(
@@ -178,6 +186,34 @@ async def get_me(analyst: Analyst = Depends(require_analyst)):
     return AnalystResponse.model_validate(analyst)
 
 
+@router.post("/change-password")
+async def change_password(
+    request: Request,
+    body: PasswordChangeRequest,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_analyst),
+):
+    password_hash = _require_local_password(analyst)
+    if not _verify_password(body.current_password, password_hash):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+    analyst.password_hash = _hash_password(body.new_password)
+    await session.commit()
+
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="auth",
+            action="analyst.password_changed",
+            actor_id=analyst.id,
+            actor_username=analyst.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+        ),
+    )
+    return {"detail": "Password updated"}
+
+
 # ── Admin endpoints ──────────────────────────────────────────
 
 async def _require_admin(analyst: Analyst = Depends(require_analyst)) -> Analyst:
@@ -274,3 +310,38 @@ async def update_analyst(
         ),
     )
     return AnalystResponse.model_validate(analyst)
+
+
+@router.post("/analysts/{analyst_id}/reset-password")
+async def reset_analyst_password(
+    analyst_id: str,
+    body: PasswordResetRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    admin: Analyst = Depends(_require_admin),
+):
+    import uuid as _uuid
+
+    result = await session.execute(
+        select(Analyst).where(Analyst.id == _uuid.UUID(analyst_id))
+    )
+    analyst = result.scalar_one_or_none()
+    if not analyst:
+        raise HTTPException(status_code=404, detail="Analyst not found")
+
+    _require_local_password(analyst)
+    analyst.password_hash = _hash_password(body.new_password)
+    await session.commit()
+
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="admin",
+            action="analyst.password_reset",
+            actor_id=admin.id,
+            actor_username=admin.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+        ),
+    )
+    return {"detail": "Password reset"}

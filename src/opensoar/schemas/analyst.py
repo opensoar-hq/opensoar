@@ -34,6 +34,7 @@ class AnalystResponse(BaseModel):
     display_name: str
     email: str | None = None
     is_active: bool
+    has_local_password: bool
     role: str
     created_at: datetime
 
@@ -51,6 +52,17 @@ class AnalystUpdate(BaseModel):
 class AnalystRoleResponse(BaseModel):
     id: str
     label: str
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+    model_config = {"extra": "forbid"}
+
+
+class PasswordResetRequest(BaseModel):
+    new_password: str
+    model_config = {"extra": "forbid"}
 
 
 class TokenResponse(BaseModel):
