@@ -35,6 +35,14 @@ docker compose exec api opensoar-bootstrap-admin \
 
 Then open [http://localhost:3000](http://localhost:3000) and sign in. Additional local accounts are created by an admin from Settings.
 
+When pulling updates on an existing Docker Compose deployment, use:
+
+```bash
+docker compose up -d --build
+```
+
+That ensures the migration image and the application images are refreshed together during upgrades.
+
 Docs: [docs.opensoar.app](https://docs.opensoar.app)
 
 Self-hosted packaging: [deploy/README.md](deploy/README.md)

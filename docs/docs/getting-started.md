@@ -47,6 +47,14 @@ Then open:
 - UI: `http://localhost:3000`
 - API docs: `http://localhost:8000/docs`
 
+When updating an existing Docker Compose install after pulling new code, use:
+
+```bash
+docker compose up -d --build
+```
+
+That refreshes the migration and app images together so schema changes are applied before the API starts.
+
 ## Verify Ingestion
 
 ```bash

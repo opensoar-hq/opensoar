@@ -119,11 +119,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-test-secret-which-is-long-enough-for-hs256}
+      API_KEY_SECRET: ${API_KEY_SECRET:-test-api-key-secret}
       PLAYBOOK_DIRS: /app/playbooks
     volumes:
       - ./src:/app/src
       - ./playbooks:/app/playbooks
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -137,11 +141,15 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-test-secret-which-is-long-enough-for-hs256}
+      API_KEY_SECRET: ${API_KEY_SECRET:-test-api-key-secret}
       PLAYBOOK_DIRS: /app/playbooks
     volumes:
       - ./src:/app/src
       - ./playbooks:/app/playbooks
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -154,11 +162,11 @@ services:
     command: alembic upgrade head
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
+      JWT_SECRET: ${JWT_SECRET:-test-secret-which-is-long-enough-for-hs256}
+      API_KEY_SECRET: ${API_KEY_SECRET:-test-api-key-secret}
     depends_on:
       postgres:
         condition: service_healthy
-    profiles:
-      - setup
 
   ui:
     build:
