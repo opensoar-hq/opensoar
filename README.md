@@ -123,6 +123,15 @@ Areas where help is most needed:
 
 ---
 
+## Part of the open-source modern SOC
+
+OpenSOAR is one piece of a three-part open-source security stack:
+- **[pwnkit](https://github.com/peaktwilight/pwnkit)** — AI agent pentester (detect)
+- **[foxguard](https://github.com/peaktwilight/foxguard)** — Rust security scanner (prevent)
+- **[opensoar](https://github.com/opensoar-hq/opensoar-core)** — Python-native SOAR platform (respond)
+
+---
+
 ## License
 
 Apache 2.0 — Use it commercially, fork it, embed it. No restrictions.
