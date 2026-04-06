@@ -32,6 +32,15 @@ cd opensoar-core
 docker compose up -d
 ```
 
+Bootstrap the first local admin:
+
+```bash
+docker compose exec api opensoar-bootstrap-admin \
+  --username admin \
+  --password changeme \
+  --display-name "OpenSOAR Admin"
+```
+
 Then open:
 
 - API: `http://localhost:8000`

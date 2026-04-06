@@ -6,12 +6,21 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class AnalystRegister(BaseModel):
+    username: str
+    display_name: str
+    email: str | None = None
+    password: str
+    model_config = {"extra": "forbid"}
+
+
 class AnalystCreate(BaseModel):
     username: str
     display_name: str
     email: str | None = None
     password: str
     role: str = "analyst"
+    model_config = {"extra": "forbid"}
 
 
 class AnalystLogin(BaseModel):
@@ -36,6 +45,12 @@ class AnalystUpdate(BaseModel):
     email: str | None = None
     is_active: bool | None = None
     role: str | None = None
+    model_config = {"extra": "forbid"}
+
+
+class AnalystRoleResponse(BaseModel):
+    id: str
+    label: str
 
 
 class TokenResponse(BaseModel):

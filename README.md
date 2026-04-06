@@ -24,7 +24,16 @@ Built for IR analysts and MSSPs. Dark-themed, fast, opinionated.
 git clone https://github.com/opensoar-hq/opensoar-core.git && cd opensoar-core && docker compose up -d
 ```
 
-Then open [http://localhost:3000](http://localhost:3000).
+Bootstrap the first local admin:
+
+```bash
+docker compose exec api opensoar-bootstrap-admin \
+  --username admin \
+  --password changeme \
+  --display-name "OpenSOAR Admin"
+```
+
+Then open [http://localhost:3000](http://localhost:3000) and sign in. Additional local accounts are created by an admin from Settings.
 
 Docs: [docs.opensoar.app](https://docs.opensoar.app)
 
@@ -76,7 +85,7 @@ Tracecat is the closest competitor in philosophy (YC-backed, developer-focused) 
 - [x] **Case management** — incidents, observables, correlation suggestions
 - [x] **AI-powered** — LLM summarization, triage recommendations, playbook generation, auto-resolve, correlation (Claude, OpenAI, Ollama)
 - [x] **Dashboard & UI** — React 19, dark theme, priority queue, MTTR, per-partner MSSP stats
-- [x] **Auth & RBAC** — JWT + API keys, 3 roles, 15 permissions
+- [x] **Auth & RBAC** — JWT + API keys, admin-managed local accounts, 3 core roles
 - [x] **Celery workers** — async execution with horizontal scaling
 - [x] **Plugin architecture** — load optional enterprise features if installed
 

@@ -57,15 +57,16 @@ class TestRegister:
         data = resp.json()
         assert data["access_token"]
         assert data["analyst"]["username"] == username
+        assert data["analyst"]["role"] == "analyst"
 
-    async def test_register_rejects_unknown_role(self, client):
+    async def test_register_rejects_role_override(self, client):
         resp = await client.post(
             "/api/v1/auth/register",
             json={
                 "username": f"badrole_{uuid.uuid4().hex[:8]}",
                 "display_name": "Bad Role",
                 "password": "securepass123",
-                "role": "superuser",
+                "role": "admin",
             },
         )
         assert resp.status_code == 422
@@ -326,6 +327,23 @@ class TestCapabilities:
         }
 
 
+class TestRoleCatalog:
+    async def test_admin_can_list_core_roles(self, client, registered_admin):
+        resp = await client.get("/api/v1/auth/roles", headers=registered_admin["headers"])
+
+        assert resp.status_code == 200
+        assert resp.json() == [
+            {"id": "admin", "label": "Admin"},
+            {"id": "analyst", "label": "Analyst"},
+            {"id": "viewer", "label": "Viewer"},
+        ]
+
+    async def test_non_admin_cannot_list_roles(self, client, registered_analyst):
+        resp = await client.get("/api/v1/auth/roles", headers=registered_analyst["headers"])
+
+        assert resp.status_code == 403
+
+
 class TestExternalIdentities:
     async def test_external_identity_can_be_persisted(self, session):
         from opensoar.models.analyst import Analyst
@@ -360,8 +378,53 @@ class TestExternalIdentities:
         assert stored.provider_type == "oidc"
 
 
-class TestAdminRoleUpdates:
-    async def test_admin_can_assign_enterprise_roles(self, client, registered_admin, session):
+class TestAdminAnalystManagement:
+    async def test_admin_can_create_local_analyst(self, client, registered_admin):
+        username = f"managed_{uuid.uuid4().hex[:8]}"
+        resp = await client.post(
+            "/api/v1/auth/analysts",
+            headers=registered_admin["headers"],
+            json={
+                "username": username,
+                "display_name": "Managed Analyst",
+                "email": "managed@opensoar.app",
+                "password": "securepass123",
+                "role": "viewer",
+            },
+        )
+
+        assert resp.status_code == 201
+        assert resp.json()["username"] == username
+        assert resp.json()["role"] == "viewer"
+
+    async def test_non_admin_cannot_create_local_analyst(self, client, registered_analyst):
+        resp = await client.post(
+            "/api/v1/auth/analysts",
+            headers=registered_analyst["headers"],
+            json={
+                "username": f"blocked_{uuid.uuid4().hex[:8]}",
+                "display_name": "Blocked Analyst",
+                "password": "securepass123",
+            },
+        )
+
+        assert resp.status_code == 403
+
+    async def test_admin_create_rejects_role_not_available_in_core(self, client, registered_admin):
+        resp = await client.post(
+            "/api/v1/auth/analysts",
+            headers=registered_admin["headers"],
+            json={
+                "username": f"tenant_role_{uuid.uuid4().hex[:8]}",
+                "display_name": "Tenant Role",
+                "password": "securepass123",
+                "role": "tenant_admin",
+            },
+        )
+
+        assert resp.status_code == 422
+
+    async def test_admin_update_rejects_role_not_available_in_core(self, client, registered_admin, session):
         from opensoar.models.analyst import Analyst
 
         analyst = Analyst(
@@ -379,16 +442,7 @@ class TestAdminRoleUpdates:
             headers=registered_admin["headers"],
             json={"role": "tenant_admin"},
         )
-        assert tenant_admin_resp.status_code == 200
-        assert tenant_admin_resp.json()["role"] == "tenant_admin"
-
-        playbook_author_resp = await client.patch(
-            f"/api/v1/auth/analysts/{analyst.id}",
-            headers=registered_admin["headers"],
-            json={"role": "playbook_author"},
-        )
-        assert playbook_author_resp.status_code == 200
-        assert playbook_author_resp.json()["role"] == "playbook_author"
+        assert tenant_admin_resp.status_code == 422
 
     async def test_admin_update_rejects_unknown_role(self, client, registered_admin, session):
         from opensoar.models.analyst import Analyst
@@ -409,3 +463,65 @@ class TestAdminRoleUpdates:
             json={"role": "superuser"},
         )
         assert resp.status_code == 422
+
+    async def test_admin_cannot_deactivate_last_active_admin(self, client, session):
+        from opensoar.api.auth import _hash_password
+        from opensoar.models.analyst import Analyst
+
+        existing_admins = await session.execute(select(Analyst).where(Analyst.role == "admin"))
+        for existing in existing_admins.scalars():
+            existing.is_active = False
+
+        admin = Analyst(
+            username=f"solo_admin_{uuid.uuid4().hex[:8]}",
+            display_name="Solo Admin",
+            email="solo-admin@opensoar.app",
+            password_hash=_hash_password("securepass123"),
+            role="admin",
+            is_active=True,
+        )
+        session.add(admin)
+        await session.commit()
+
+        headers = {
+            "Authorization": f"Bearer {create_access_token(admin.id, admin.username)}"
+        }
+
+        resp = await client.patch(
+            f"/api/v1/auth/analysts/{admin.id}",
+            headers=headers,
+            json={"is_active": False},
+        )
+
+        assert resp.status_code == 400
+
+    async def test_admin_cannot_demote_last_active_admin(self, client, session):
+        from opensoar.api.auth import _hash_password
+        from opensoar.models.analyst import Analyst
+
+        existing_admins = await session.execute(select(Analyst).where(Analyst.role == "admin"))
+        for existing in existing_admins.scalars():
+            existing.is_active = False
+
+        admin = Analyst(
+            username=f"solo_admin_{uuid.uuid4().hex[:8]}",
+            display_name="Solo Admin",
+            email="solo-admin@opensoar.app",
+            password_hash=_hash_password("securepass123"),
+            role="admin",
+            is_active=True,
+        )
+        session.add(admin)
+        await session.commit()
+
+        headers = {
+            "Authorization": f"Bearer {create_access_token(admin.id, admin.username)}"
+        }
+
+        resp = await client.patch(
+            f"/api/v1/auth/analysts/{admin.id}",
+            headers=headers,
+            json={"role": "analyst"},
+        )
+
+        assert resp.status_code == 400

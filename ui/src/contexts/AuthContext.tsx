@@ -15,7 +15,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null)
 const DEFAULT_AUTH_CAPABILITIES: AuthCapabilities = {
   local_login_enabled: true,
-  local_registration_enabled: true,
+  local_registration_enabled: false,
   providers: [],
 }
 

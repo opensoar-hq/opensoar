@@ -42,6 +42,23 @@ class Permission(StrEnum):
     SETTINGS_MANAGE = "settings:manage"
 
 
+CORE_ANALYST_ROLE_LABELS: dict[str, str] = {
+    "admin": "Admin",
+    "analyst": "Analyst",
+    "viewer": "Viewer",
+}
+
+ENTERPRISE_ANALYST_ROLE_LABELS: dict[str, str] = {
+    "tenant_admin": "Tenant Admin",
+    "playbook_author": "Playbook Author",
+}
+
+ANALYST_ROLE_LABELS: dict[str, str] = {
+    **CORE_ANALYST_ROLE_LABELS,
+    **ENTERPRISE_ANALYST_ROLE_LABELS,
+}
+
+
 # Role → Permission mapping
 ROLE_PERMISSIONS: dict[str, set[Permission]] = {
     "admin": set(Permission),  # All permissions

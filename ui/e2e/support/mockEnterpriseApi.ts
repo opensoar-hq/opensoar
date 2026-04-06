@@ -23,6 +23,11 @@ interface Analyst {
   created_at: string
 }
 
+interface AnalystRole {
+  id: string
+  label: string
+}
+
 interface ApiKeyInfo {
   id: string
   name: string
@@ -92,6 +97,7 @@ interface MockEnterpriseState {
   authenticated: boolean
   analyst: Analyst | null
   authCapabilities: AuthCapabilities
+  analystRoles: AnalystRole[]
   analysts: Analyst[]
   integrations: {
     id: string
@@ -128,6 +134,7 @@ interface MockEnterpriseOptions {
   authenticated?: boolean
   analyst?: Analyst | null
   authCapabilities?: AuthCapabilities
+  analystRoles?: AnalystRole[]
   analysts?: Analyst[]
   integrations?: {
     id: string
@@ -208,6 +215,13 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
       local_registration_enabled: false,
       providers: [],
     },
+    analystRoles: options.analystRoles ?? [
+      { id: 'admin', label: 'Admin' },
+      { id: 'analyst', label: 'Analyst' },
+      { id: 'viewer', label: 'Viewer' },
+      { id: 'tenant_admin', label: 'Tenant Admin' },
+      { id: 'playbook_author', label: 'Playbook Author' },
+    ],
     analysts: options.analysts ?? [defaultAdmin, defaultAnalyst],
     integrations: options.integrations ?? [
       {
@@ -334,6 +348,27 @@ export async function mockEnterpriseApi(
 
     if (method === 'GET' && pathname === '/api/v1/auth/analysts') {
       await fulfillJson(route, state.analysts)
+      return
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/auth/roles') {
+      await fulfillJson(route, state.analystRoles)
+      return
+    }
+
+    if (method === 'POST' && pathname === '/api/v1/auth/analysts') {
+      const body = requestBody(route)
+      const analyst: Analyst = {
+        id: nextId('analyst'),
+        username: String(body.username ?? ''),
+        display_name: String(body.display_name ?? body.username ?? ''),
+        email: typeof body.email === 'string' ? body.email : null,
+        is_active: true,
+        role: typeof body.role === 'string' ? body.role : 'analyst',
+        created_at: now,
+      }
+      state.analysts.push(analyst)
+      await fulfillJson(route, analyst, 201)
       return
     }
 

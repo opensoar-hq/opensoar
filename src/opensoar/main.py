@@ -27,7 +27,7 @@ from opensoar.config import settings
 from opensoar.core.registry import PlaybookRegistry
 from opensoar.core.triggers import TriggerEngine
 from opensoar.db import async_session
-from opensoar.plugins import initialize_plugin_state, load_optional_plugins
+from opensoar.plugins import configure_local_auth, initialize_plugin_state, load_optional_plugins
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -76,6 +76,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 initialize_plugin_state(app)
+configure_local_auth(
+    app,
+    login_enabled=settings.local_login_enabled,
+    registration_enabled=settings.local_registration_enabled,
+)
 
 # ── Middleware ──────────────────────────────────────────────
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)

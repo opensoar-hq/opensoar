@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     playbook_dirs: str = "playbooks"
     integration_dirs: str = ""
+    local_login_enabled: bool = True
+    local_registration_enabled: bool = False
     api_key_secret: str = ""
     jwt_secret: str = ""
     jwt_expire_minutes: int = 480

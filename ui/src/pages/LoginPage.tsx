@@ -216,6 +216,12 @@ export function LoginPage() {
                       </>
                     ) : mode === 'login' ? 'Sign In' : 'Create Account'}
                   </Button>
+
+                  {mode === 'login' && !canRegisterLocally ? (
+                    <div className="text-[11px] text-muted text-center">
+                      Local accounts are created by an administrator.
+                    </div>
+                  ) : null}
                 </form>
               ) : !hasExternalProviders ? (
                 <div className="rounded-md border border-border bg-bg px-4 py-3 text-sm text-muted">

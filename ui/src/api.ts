@@ -162,6 +162,11 @@ export interface Analyst {
   created_at: string
 }
 
+export interface AnalystRole {
+  id: string
+  label: string
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: string
@@ -357,6 +362,7 @@ export const api = {
       postJSON<TokenResponse>('/auth/login', data),
     me: () => fetchJSON<Analyst>('/auth/me'),
     capabilities: () => fetchJSON<AuthCapabilities>('/auth/capabilities'),
+    roles: () => fetchJSON<AnalystRole[]>('/auth/roles'),
   },
   webhooks: {
     createAlert: (payload: Record<string, unknown>) =>
@@ -440,6 +446,8 @@ export const api = {
   },
   analysts: {
     list: () => fetchJSON<Analyst[]>('/auth/analysts'),
+    create: (data: { username: string; display_name: string; password: string; email?: string; role?: string }) =>
+      postJSON<Analyst>('/auth/analysts', data),
     update: (id: string, data: { display_name?: string; email?: string; is_active?: boolean; role?: string }) =>
       patchJSON<Analyst>(`/auth/analysts/${id}`, data),
   },

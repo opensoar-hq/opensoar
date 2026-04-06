@@ -21,6 +21,9 @@ dependencies = [
     "PyJWT>=2.9.0",
 ]
 
+[project.scripts]
+opensoar-bootstrap-admin = "opensoar.bootstrap_admin:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.0",

@@ -10,10 +10,12 @@ from opensoar.plugins import (
     dispatch_api_key_validators,
     apply_tenant_access_query,
     enforce_tenant_access,
+    get_analyst_roles,
     get_auth_capabilities,
     get_plugin_migration_config,
     import_optional_plugin_models,
     load_optional_plugins,
+    register_analyst_role,
     register_api_key_validator,
     register_audit_sink,
     register_tenant_access_validator,
@@ -40,9 +42,14 @@ def test_load_optional_plugins_no_plugins(monkeypatch):
     assert loaded == []
     assert get_auth_capabilities(app) == {
         "local_login_enabled": True,
-        "local_registration_enabled": True,
+        "local_registration_enabled": False,
         "providers": [],
     }
+    assert get_analyst_roles(app) == [
+        {"id": "admin", "label": "Admin"},
+        {"id": "analyst", "label": "Analyst"},
+        {"id": "viewer", "label": "Viewer"},
+    ]
 
 
 def test_load_optional_plugins_registers_auth_provider(monkeypatch):
@@ -184,6 +191,19 @@ async def test_dispatch_api_key_validators_calls_registered_validator():
     )
 
     assert seen == [("db-key", "request", "webhooks:ingest")]
+
+
+def test_register_analyst_role_adds_runtime_role():
+    app = FastAPI()
+
+    register_analyst_role(app, role="tenant_admin", label="Tenant Admin")
+
+    assert get_analyst_roles(app) == [
+        {"id": "admin", "label": "Admin"},
+        {"id": "analyst", "label": "Analyst"},
+        {"id": "viewer", "label": "Viewer"},
+        {"id": "tenant_admin", "label": "Tenant Admin"},
+    ]
 
 
 async def test_tenant_access_validator_can_modify_query_and_validate_resource():

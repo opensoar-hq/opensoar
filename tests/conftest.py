@@ -7,8 +7,9 @@ from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
 # Set required secrets before any opensoar imports (config validates on import)
-os.environ.setdefault("JWT_SECRET", "test-secret")
+os.environ.setdefault("JWT_SECRET", "test-secret-which-is-long-enough-for-hs256")
 os.environ.setdefault("API_KEY_SECRET", "test-api-key-secret")
+os.environ.setdefault("LOCAL_REGISTRATION_ENABLED", "true")
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -134,24 +135,29 @@ async def registered_analyst(client: AsyncClient) -> dict:
 
 
 @pytest.fixture
-async def registered_admin(client: AsyncClient) -> dict:
-    """Register a new admin analyst via the API."""
-    username = f"admin_{uuid.uuid4().hex[:8]}"
-    resp = await client.post(
-        "/api/v1/auth/register",
-        json={
-            "username": username,
-            "display_name": "Test Admin",
-            "email": "admin@opensoar.app",
-            "password": "adminpass123",
-            "role": "admin",
-        },
+async def registered_admin(session: AsyncSession) -> dict:
+    """Create a new admin analyst directly in the DB."""
+    from opensoar.api.auth import _hash_password
+    from opensoar.models.analyst import Analyst
+    from opensoar.auth.jwt import create_access_token
+
+    analyst = Analyst(
+        username=f"admin_{uuid.uuid4().hex[:8]}",
+        display_name="Test Admin",
+        email="admin@opensoar.app",
+        password_hash=_hash_password("adminpass123"),
+        role="admin",
+        is_active=True,
     )
-    data = resp.json()
+    session.add(analyst)
+    await session.commit()
+    await session.refresh(analyst)
+
+    token = create_access_token(analyst.id, analyst.username)
     return {
-        "token": data["access_token"],
-        "analyst": data["analyst"],
-        "headers": {"Authorization": f"Bearer {data['access_token']}"},
+        "token": token,
+        "analyst": analyst,
+        "headers": {"Authorization": f"Bearer {token}"},
     }
 
 

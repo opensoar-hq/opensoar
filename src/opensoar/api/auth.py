@@ -9,12 +9,14 @@ from opensoar.api.deps import get_db
 from opensoar.auth.jwt import create_access_token, require_analyst
 from opensoar.auth.rbac import VALID_ANALYST_ROLES
 from opensoar.models.analyst import Analyst
-from opensoar.plugins import dispatch_audit_event, get_auth_capabilities
+from opensoar.plugins import dispatch_audit_event, get_analyst_roles, get_auth_capabilities
 from opensoar.schemas.audit import AuditEvent
 from opensoar.schemas.auth import AuthCapabilitiesResponse
 from opensoar.schemas.analyst import (
     AnalystCreate,
     AnalystLogin,
+    AnalystRegister,
+    AnalystRoleResponse,
     AnalystResponse,
     AnalystUpdate,
     TokenResponse,
@@ -40,15 +42,57 @@ def _validate_role(role: str) -> str:
     return role
 
 
+def _validate_assignable_role(request: Request, role: str) -> str:
+    role = _validate_role(role)
+    available_roles = {item["id"] for item in get_analyst_roles(request.app)}
+    if role not in available_roles:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Role '{role}' is not available in this deployment",
+        )
+    return role
+
+
+async def _assert_not_last_active_admin(
+    session: AsyncSession,
+    analyst: Analyst,
+    update_data: dict[str, object],
+) -> None:
+    role_after = str(update_data.get("role", analyst.role))
+    is_active_after = bool(update_data.get("is_active", analyst.is_active))
+    if analyst.role != "admin" or (role_after == "admin" and is_active_after):
+        return
+
+    result = await session.execute(
+        select(Analyst.id).where(
+            Analyst.role == "admin",
+            Analyst.is_active.is_(True),
+            Analyst.id != analyst.id,
+        )
+    )
+    if result.first() is None:
+        raise HTTPException(status_code=400, detail="Cannot remove the last active admin")
+
+
 @router.get("/capabilities", response_model=AuthCapabilitiesResponse)
 async def capabilities(request: Request):
     return AuthCapabilitiesResponse.model_validate(get_auth_capabilities(request.app))
 
 
+@router.get("/roles", response_model=list[AnalystRoleResponse])
+async def list_roles(
+    request: Request,
+    admin: Analyst = Depends(require_analyst),
+):
+    if admin.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return [AnalystRoleResponse.model_validate(item) for item in get_analyst_roles(request.app)]
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(
     request: Request,
-    body: AnalystCreate,
+    body: AnalystRegister,
     session: AsyncSession = Depends(get_db),
 ):
     if not get_auth_capabilities(request.app)["local_registration_enabled"]:
@@ -65,7 +109,7 @@ async def register(
         display_name=body.display_name,
         email=body.email,
         password_hash=_hash_password(body.password),
-        role=_validate_role(body.role),
+        role="analyst",
     )
     session.add(analyst)
     await session.commit()
@@ -142,6 +186,45 @@ async def _require_admin(analyst: Analyst = Depends(require_analyst)) -> Analyst
     return analyst
 
 
+@router.post("/analysts", response_model=AnalystResponse, status_code=201)
+async def create_analyst(
+    request: Request,
+    body: AnalystCreate,
+    session: AsyncSession = Depends(get_db),
+    admin: Analyst = Depends(_require_admin),
+):
+    existing = await session.execute(
+        select(Analyst).where(Analyst.username == body.username)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    analyst = Analyst(
+        username=body.username,
+        display_name=body.display_name,
+        email=body.email,
+        password_hash=_hash_password(body.password),
+        role=_validate_assignable_role(request, body.role),
+    )
+    session.add(analyst)
+    await session.commit()
+    await session.refresh(analyst)
+
+    await dispatch_audit_event(
+        request.app,
+        AuditEvent(
+            category="admin",
+            action="analyst.created",
+            actor_id=admin.id,
+            actor_username=admin.username,
+            target_type="analyst",
+            target_id=str(analyst.id),
+            metadata_json={"role": analyst.role},
+        ),
+    )
+    return AnalystResponse.model_validate(analyst)
+
+
 @router.get("/analysts", response_model=list[AnalystResponse])
 async def list_analysts(
     session: AsyncSession = Depends(get_db),
@@ -170,7 +253,8 @@ async def update_analyst(
 
     update_data = body.model_dump(exclude_unset=True)
     if "role" in update_data:
-        update_data["role"] = _validate_role(update_data["role"])
+        update_data["role"] = _validate_assignable_role(request, str(update_data["role"]))
+    await _assert_not_last_active_admin(session, analyst, update_data)
     for field, value in update_data.items():
         setattr(analyst, field, value)
 

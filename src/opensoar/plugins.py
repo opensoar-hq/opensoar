@@ -13,6 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from opensoar.auth.rbac import CORE_ANALYST_ROLE_LABELS
 from opensoar.schemas.audit import AuditEvent
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,11 @@ PLUGIN_VERSION_LOCATIONS_ATTR = "PLUGIN_VERSION_LOCATIONS"
 
 def initialize_plugin_state(app: FastAPI) -> None:
     """Initialize shared plugin state once so optional packages can extend it."""
+    if not hasattr(app.state, "analyst_roles"):
+        app.state.analyst_roles = [
+            {"id": role_id, "label": label}
+            for role_id, label in CORE_ANALYST_ROLE_LABELS.items()
+        ]
     if not hasattr(app.state, "auth_providers"):
         app.state.auth_providers = []
     if not hasattr(app.state, "audit_sinks"):
@@ -35,7 +41,7 @@ def initialize_plugin_state(app: FastAPI) -> None:
     if not hasattr(app.state, "local_auth_enabled"):
         app.state.local_auth_enabled = True
     if not hasattr(app.state, "local_registration_enabled"):
-        app.state.local_registration_enabled = True
+        app.state.local_registration_enabled = False
 
 
 def iter_plugin_entry_points(group: str = PLUGIN_GROUP) -> Iterable[Any]:
@@ -141,6 +147,31 @@ def configure_local_auth(
         app.state.local_auth_enabled = login_enabled
     if registration_enabled is not None:
         app.state.local_registration_enabled = registration_enabled
+
+
+def register_analyst_role(
+    app: FastAPI,
+    *,
+    role: str,
+    label: str | None = None,
+) -> None:
+    initialize_plugin_state(app)
+
+    roles = [
+        item for item in app.state.analyst_roles if item["id"] != role
+    ]
+    roles.append(
+        {
+            "id": role,
+            "label": label or role.replace("_", " ").title(),
+        }
+    )
+    app.state.analyst_roles = roles
+
+
+def get_analyst_roles(app: FastAPI) -> list[dict[str, str]]:
+    initialize_plugin_state(app)
+    return list(app.state.analyst_roles)
 
 
 def register_auth_provider(

@@ -374,10 +374,49 @@ function ApiKeysTab() {
 function AnalystsTab() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [showDialog, setShowDialog] = useState(false)
+  const [form, setForm] = useState({
+    username: '',
+    display_name: '',
+    email: '',
+    password: '',
+    role: 'analyst',
+  })
 
   const { data: analysts, isLoading } = useQuery({
     queryKey: ['analysts'],
     queryFn: api.analysts.list,
+  })
+
+  const { data: roles = [] } = useQuery({
+    queryKey: ['analyst-roles'],
+    queryFn: api.auth.roles,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      api.analysts.create({
+        username: form.username,
+        display_name: form.display_name,
+        email: form.email || undefined,
+        password: form.password,
+        role: form.role,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['analysts'] })
+      setShowDialog(false)
+      setForm({
+        username: '',
+        display_name: '',
+        email: '',
+        password: '',
+        role: roles[0]?.id ?? 'analyst',
+      })
+      toast.success('Analyst created')
+    },
+    onError: () => {
+      toast.error('Failed to create analyst')
+    },
   })
 
   const updateMutation = useMutation({
@@ -392,6 +431,11 @@ function AnalystsTab() {
     },
   })
 
+  const roleOptions = roles.map((role) => ({
+    value: role.id,
+    label: role.label,
+  }))
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -403,7 +447,84 @@ function AnalystsTab() {
 
   return (
     <div>
-      <h3 className="text-sm font-medium text-heading m-0 mb-4">Analysts</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-heading m-0">Analysts</h3>
+        <Button size="sm" onClick={() => {
+          setForm((prev) => ({ ...prev, role: roles[0]?.id ?? prev.role }))
+          setShowDialog(true)
+        }}>
+          <Plus size={14} /> Add Analyst
+        </Button>
+      </div>
+
+      <Dialog open={showDialog} onClose={() => setShowDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowDialog(false)}>
+            <DialogTitle>Create Analyst</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="analyst-username">Username</Label>
+                <Input
+                  id="analyst-username"
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="analyst-display-name">Display Name</Label>
+                <Input
+                  id="analyst-display-name"
+                  value={form.display_name}
+                  onChange={(e) => setForm({ ...form, display_name: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="analyst-email">Email</Label>
+                <Input
+                  id="analyst-email"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="analyst-role">Role</Label>
+                <Select
+                  id="analyst-role"
+                  value={form.role}
+                  onChange={(value) => setForm({ ...form, role: value })}
+                  options={roleOptions}
+                  className="w-full"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="analyst-password">Password</Label>
+              <Input
+                id="analyst-password"
+                type="password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" onClick={() => setShowDialog(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => createMutation.mutate()}
+              disabled={!form.username || !form.display_name || !form.password || !form.role}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {analysts && analysts.length > 0 ? (
         <Card>
           {analysts.map((a) => (
@@ -416,13 +537,7 @@ function AnalystsTab() {
               <Select
                 value={a.role}
                 onChange={(v) => updateMutation.mutate({ id: a.id, data: { role: v } })}
-                options={[
-                  { value: 'admin', label: 'Admin' },
-                  { value: 'analyst', label: 'Analyst' },
-                  { value: 'viewer', label: 'Viewer' },
-                  { value: 'tenant_admin', label: 'Tenant Admin' },
-                  { value: 'playbook_author', label: 'Playbook Author' },
-                ]}
+                options={roleOptions}
               />
               <span className={`text-[11px] px-2 py-0.5 rounded ${a.is_active ? 'bg-success/15 text-success' : 'bg-danger/15 text-danger'}`}>
                 {a.is_active ? 'Active' : 'Inactive'}
@@ -438,7 +553,7 @@ function AnalystsTab() {
           ))}
         </Card>
       ) : (
-        <EmptyState icon={<Users size={28} />} title="No analysts" description="Analysts will appear here after registration" />
+        <EmptyState icon={<Users size={28} />} title="No analysts" description="Create a local analyst account to grant access" />
       )}
     </div>
   )
