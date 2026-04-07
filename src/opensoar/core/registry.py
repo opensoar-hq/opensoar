@@ -66,7 +66,7 @@ class PlaybookRegistry:
                 continue
             if self._conditions_match(pb.meta.conditions, alert_data):
                 matches.append(pb)
-        return matches
+        return sorted(matches, key=lambda pb: (pb.meta.order, pb.meta.name))
 
     def _conditions_match(self, conditions: dict, alert_data: dict) -> bool:
         if not conditions:
@@ -98,10 +98,12 @@ class PlaybookRegistry:
                 existing.trigger_type = pb.meta.trigger
                 existing.trigger_config = pb.meta.conditions
                 existing.description = pb.meta.description
+                existing.execution_order = pb.meta.order
             else:
                 definition = PlaybookDefinition(
                     name=name,
                     description=pb.meta.description,
+                    execution_order=pb.meta.order,
                     module_path=pb.module,
                     function_name=pb.func.__name__,
                     trigger_type=pb.meta.trigger,

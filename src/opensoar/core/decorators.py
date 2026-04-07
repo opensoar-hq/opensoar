@@ -29,6 +29,7 @@ class PlaybookMeta:
     conditions: dict[str, Any] = field(default_factory=dict)
     description: str = ""
     enabled: bool = True
+    order: int = 1000
 
 
 @dataclass
@@ -159,6 +160,7 @@ def playbook(
     conditions: dict[str, Any] | None = None,
     description: str = "",
     name: str | None = None,
+    order: int = 1000,
 ) -> Callable:
     def decorator(func: Callable) -> Callable:
         meta = PlaybookMeta(
@@ -166,6 +168,7 @@ def playbook(
             trigger=trigger,
             conditions=conditions or {},
             description=description,
+            order=order,
         )
         func._soar_playbook = meta
 

@@ -125,11 +125,11 @@ async def receive_alert(
     matches = engine.match(alert.source, alert.normalized)
 
     playbook_names = []
-    for pb in matches:
-        from opensoar.worker.tasks import execute_playbook_task
+    if matches:
+        from opensoar.worker.tasks import execute_playbook_sequence_task
 
-        execute_playbook_task.delay(pb.meta.name, str(alert.id))
-        playbook_names.append(pb.meta.name)
+        playbook_names = [pb.meta.name for pb in matches]
+        execute_playbook_sequence_task.delay(playbook_names, str(alert.id))
 
     await session.commit()
 
@@ -156,11 +156,11 @@ async def receive_elastic_alert(
     matches = engine.match("elastic", alert.normalized)
 
     playbook_names = []
-    for pb in matches:
-        from opensoar.worker.tasks import execute_playbook_task
+    if matches:
+        from opensoar.worker.tasks import execute_playbook_sequence_task
 
-        execute_playbook_task.delay(pb.meta.name, str(alert.id))
-        playbook_names.append(pb.meta.name)
+        playbook_names = [pb.meta.name for pb in matches]
+        execute_playbook_sequence_task.delay(playbook_names, str(alert.id))
 
     await session.commit()
 

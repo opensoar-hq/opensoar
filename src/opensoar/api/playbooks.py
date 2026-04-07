@@ -24,7 +24,10 @@ async def list_playbooks(
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_READ)),
 ):
-    query = select(PlaybookDefinition).order_by(PlaybookDefinition.name)
+    query = select(PlaybookDefinition).order_by(
+        PlaybookDefinition.execution_order,
+        PlaybookDefinition.name,
+    )
     query = await apply_tenant_access_query(
         request.app,
         query=query,

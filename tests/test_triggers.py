@@ -76,6 +76,48 @@ class TestTriggerEngine:
         # Clean up
         del _PLAYBOOK_REGISTRY["trigger_test_pb"]
 
+    def test_match_respects_explicit_playbook_order(self):
+        from opensoar.core.triggers import TriggerEngine
+
+        registry = PlaybookRegistry([])
+
+        async def first_pb(alert):
+            pass
+
+        async def second_pb(alert):
+            pass
+
+        from opensoar.core.decorators import _PLAYBOOK_REGISTRY
+
+        _PLAYBOOK_REGISTRY["ordered_second"] = RegisteredPlaybook(
+            meta=PlaybookMeta(
+                name="ordered_second",
+                trigger="webhook",
+                conditions={"severity": "high"},
+                order=20,
+            ),
+            func=second_pb,
+            module="test",
+        )
+        _PLAYBOOK_REGISTRY["ordered_first"] = RegisteredPlaybook(
+            meta=PlaybookMeta(
+                name="ordered_first",
+                trigger="webhook",
+                conditions={"severity": "high"},
+                order=10,
+            ),
+            func=first_pb,
+            module="test",
+        )
+
+        engine = TriggerEngine(registry)
+        matches = engine.match("webhook", {"severity": "high"})
+        names = [m.meta.name for m in matches if m.meta.name in {"ordered_first", "ordered_second"}]
+        assert names == ["ordered_first", "ordered_second"]
+
+        del _PLAYBOOK_REGISTRY["ordered_second"]
+        del _PLAYBOOK_REGISTRY["ordered_first"]
+
     def test_no_match(self):
         from opensoar.core.triggers import TriggerEngine
 

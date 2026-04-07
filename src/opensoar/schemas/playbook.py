@@ -12,6 +12,7 @@ class PlaybookResponse(BaseModel):
     name: str
     description: str | None = None
     partner: str | None = None
+    execution_order: int
     module_path: str
     function_name: str
     trigger_type: str | None = None

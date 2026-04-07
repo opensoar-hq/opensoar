@@ -16,4 +16,5 @@ class PlaybookDefinition(Base):
     trigger_type: Mapped[str | None] = mapped_column(String(50))
     trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    execution_order: Mapped[int] = mapped_column(Integer, default=1000, server_default="1000")
     version: Mapped[int] = mapped_column(Integer, default=1)
