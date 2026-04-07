@@ -9,7 +9,7 @@ OpenSOAR playbooks are plain Python modules. The system discovers them from conf
 ## Basic Structure
 
 ```python
-from opensoar import playbook, action
+from opensoar import playbook, action, resolve_current_alert
 import asyncio
 
 
@@ -27,6 +27,11 @@ async def enrich_ip(ip: str | None) -> dict:
 )
 async def triage_high_severity(alert_data):
     result = await enrich_ip(alert_data.get("source_ip"))
+    if result.get("status") == "ok":
+        await resolve_current_alert(
+            determination="benign",
+            reason="Issue remediated automatically by playbook",
+        )
     return {"enrichment": result}
 ```
 
@@ -60,6 +65,21 @@ vt_result, abuse_result = await asyncio.gather(
     lookup_abuseipdb(source_ip),
 )
 ```
+
+### Resolving The Current Alert
+
+When a playbook is running for a specific alert, it can resolve that bound alert directly:
+
+```python
+from opensoar import resolve_current_alert
+
+await resolve_current_alert(
+    determination="benign",
+    reason="Issue remediated automatically by playbook",
+)
+```
+
+This is the supported path for automation that wants to mark the current alert as resolved after remediation succeeds.
 
 ## Recommended Workflow
 

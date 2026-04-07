@@ -908,7 +908,7 @@ export function AlertDetailPage() {
               />
             </div>
             <div>
-              <div className="text-[11px] text-muted uppercase tracking-wide mb-1">Partner <span className="text-danger">*</span></div>
+              <div className="text-[11px] text-muted uppercase tracking-wide mb-1">Partner <span className="text-muted">(optional)</span></div>
               <Input
                 type="text"
                 placeholder="Partner / tenant name"
@@ -932,20 +932,16 @@ export function AlertDetailPage() {
               variant="primary" size="sm"
               onClick={() => {
                 const det = resolveDetermination || (alert.determination !== 'unknown' ? alert.determination : '')
-                const partner = resolvePartner || alert.partner || ''
                 if (!det) {
                   toast.error('Set a determination before resolving')
-                  return
-                }
-                if (!partner.trim()) {
-                  toast.error('Set a partner before resolving')
                   return
                 }
                 const data: Record<string, string | undefined> = {
                   status: 'resolved',
                   determination: det,
-                  partner: partner.trim(),
                 }
+                const partner = (resolvePartner || alert.partner || '').trim()
+                if (partner) data.partner = partner
                 if (resolveReason) data.resolve_reason = resolveReason
                 updateMutation.mutate(data)
               }}

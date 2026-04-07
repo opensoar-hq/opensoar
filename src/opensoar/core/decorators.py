@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,6 +41,8 @@ class RegisteredPlaybook:
 @dataclass
 class ExecutionContext:
     run_id: Any
+    alert_id: Any | None = None
+    session: AsyncSession | None = None
     record_action: Callable | None = None
 
 

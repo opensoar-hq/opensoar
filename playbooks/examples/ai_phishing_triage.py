@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 
-from opensoar import action, playbook
+from opensoar import action, playbook, resolve_current_alert
 
 logger = logging.getLogger(__name__)
 
@@ -190,35 +190,16 @@ Respond with ONLY a JSON object:
 @action(name="auto_resolve_benign_phishing", timeout=10)
 async def auto_resolve_benign(alert_id: str, reasoning: str) -> dict:
     """Auto-resolve an alert determined to be benign."""
-    import uuid
+    del alert_id
 
-    from sqlalchemy import select
-
-    from opensoar.db import async_session
-    from opensoar.models.activity import Activity
-    from opensoar.models.alert import Alert
-
-    async with async_session() as session:
-        result = await session.execute(
-            select(Alert).where(Alert.id == uuid.UUID(alert_id))
-        )
-        alert = result.scalar_one_or_none()
-        if not alert:
-            return {"resolved": False, "error": "Alert not found"}
-
-        alert.status = "resolved"
-        alert.determination = "benign"
-        alert.resolve_reason = f"AI auto-resolved: {reasoning}"
-
-        session.add(Activity(
-            alert_id=alert.id,
-            action="ai_auto_resolved",
-            detail=f"AI phishing triage determined alert is benign: {reasoning}",
-            metadata_json={"ai_resolved": True, "playbook": "ai_phishing_triage"},
-        ))
-
-        await session.commit()
-        return {"resolved": True, "determination": "benign"}
+    result = await resolve_current_alert(
+        determination="benign",
+        reason=f"AI auto-resolved: {reasoning}",
+        activity_action="ai_auto_resolved",
+        activity_detail=f"AI phishing triage determined alert is benign: {reasoning}",
+        activity_metadata={"ai_resolved": True, "playbook": "ai_phishing_triage"},
+    )
+    return {"resolved": True, "determination": result["determination"]}
 
 
 @action(name="escalate_phishing_alert", timeout=15, retries=1)

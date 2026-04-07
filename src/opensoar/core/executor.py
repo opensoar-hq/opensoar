@@ -67,7 +67,12 @@ class PlaybookExecutor:
             self.session.add(action_result)
             await self.session.flush()
 
-        ctx = ExecutionContext(run_id=run.id, record_action=record_action)
+        ctx = ExecutionContext(
+            run_id=run.id,
+            alert_id=alert_id,
+            session=self.session,
+            record_action=record_action,
+        )
         set_execution_context(ctx)
 
         try:
