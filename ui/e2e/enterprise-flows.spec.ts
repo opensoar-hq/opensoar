@@ -215,6 +215,24 @@ test('assigns ownership to a global integration and shows migration queue', asyn
   await expect(page.getByRole('heading', { name: 'Global Resource Migration' })).toBeVisible()
 })
 
+test('manages incident collaboration workflow from the incident detail page', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/incidents/incident-1')
+
+  await expect(page.getByRole('heading', { name: 'Northwind Workspace Incident' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Assign to me' }).click()
+  await expect(page.getByRole('button', { name: 'Reassign' })).toBeVisible()
+
+  await page.getByPlaceholder('Add a comment...').fill('Need malware triage before handoff')
+  await page.getByRole('button', { name: 'Comment' }).click()
+  await expect(page.getByText('Need malware triage before handoff')).toBeVisible()
+
+  await page.getByPlaceholder('Observable value').fill('198.51.100.23')
+  await page.getByRole('button', { name: 'Add' }).click()
+  await expect(page.getByText('ip:198.51.100.23', { exact: true })).toBeVisible()
+})
+
 test('tenant admin only sees enterprise settings tab', async ({ page }) => {
   await mockEnterpriseApi(page, {
     analyst: {

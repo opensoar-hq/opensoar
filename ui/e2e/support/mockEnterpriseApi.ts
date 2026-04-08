@@ -94,6 +94,74 @@ interface DataRetentionPolicyInfo {
   notes: string | null
 }
 
+interface IncidentInfo {
+  id: string
+  title: string
+  description: string | null
+  severity: string
+  status: string
+  assigned_to: string | null
+  assigned_username: string | null
+  tags: string[] | null
+  alert_count: number
+  closed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface AlertInfo {
+  id: string
+  source: string
+  source_id: string | null
+  title: string
+  description: string | null
+  severity: string
+  status: string
+  source_ip: string | null
+  dest_ip: string | null
+  hostname: string | null
+  rule_name: string | null
+  iocs: Record<string, unknown> | null
+  tags: string[] | null
+  partner: string | null
+  determination: string
+  assigned_to: string | null
+  assigned_username: string | null
+  duplicate_count: number
+  created_at: string
+  updated_at: string
+}
+
+interface ActivityInfo {
+  id: string
+  alert_id: string | null
+  incident_id: string | null
+  analyst_id: string | null
+  analyst_username: string | null
+  action: string
+  detail: string | null
+  metadata_json: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+interface ObservableInfo {
+  id: string
+  type: string
+  value: string
+  source: string | null
+  enrichment_status: string
+  enrichments: Record<string, unknown>[] | null
+  tags: string[] | null
+  created_at: string
+}
+
+interface IncidentSuggestionInfo {
+  source_ip: string
+  alert_count: number
+  alerts: AlertInfo[]
+}
+
 interface MockEnterpriseState {
   authenticated: boolean
   analyst: Analyst | null
@@ -130,6 +198,12 @@ interface MockEnterpriseState {
   providers: SSOProviderInfo[]
   schedules: ReportScheduleInfo[]
   dataRetention: DataRetentionPolicyInfo
+  incidents: IncidentInfo[]
+  alerts: AlertInfo[]
+  incidentAlerts: Record<string, AlertInfo[]>
+  incidentActivities: Record<string, ActivityInfo[]>
+  incidentObservables: Record<string, ObservableInfo[]>
+  incidentSuggestions: IncidentSuggestionInfo[]
 }
 
 interface MockEnterpriseOptions {
@@ -168,6 +242,12 @@ interface MockEnterpriseOptions {
   providers?: SSOProviderInfo[]
   schedules?: ReportScheduleInfo[]
   dataRetention?: DataRetentionPolicyInfo
+  incidents?: IncidentInfo[]
+  alerts?: AlertInfo[]
+  incidentAlerts?: Record<string, AlertInfo[]>
+  incidentActivities?: Record<string, ActivityInfo[]>
+  incidentObservables?: Record<string, ObservableInfo[]>
+  incidentSuggestions?: IncidentSuggestionInfo[]
 }
 
 const now = '2026-04-04T00:00:00.000Z'
@@ -209,6 +289,120 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
       prefix: 'osk_live',
       is_active: true,
       created_at: now,
+    },
+  ]
+
+  const alerts = options.alerts ?? [
+    {
+      id: 'alert-1',
+      source: 'elastic',
+      source_id: 'elastic-1',
+      title: 'Northwind suspicious login',
+      description: 'Repeated failed logins from one IP',
+      severity: 'high',
+      status: 'new',
+      source_ip: '203.0.113.42',
+      dest_ip: null,
+      hostname: 'northwind-web-01',
+      rule_name: 'Suspicious Login',
+      iocs: { ips: ['203.0.113.42'] },
+      tags: ['authentication'],
+      partner: 'northwind',
+      determination: 'unknown',
+      assigned_to: null,
+      assigned_username: null,
+      duplicate_count: 1,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: 'alert-2',
+      source: 'elastic',
+      source_id: 'elastic-2',
+      title: 'Northwind second suspicious login',
+      description: 'Second alert sharing the same IP',
+      severity: 'medium',
+      status: 'new',
+      source_ip: '203.0.113.42',
+      dest_ip: null,
+      hostname: 'northwind-web-02',
+      rule_name: 'Suspicious Login',
+      iocs: { ips: ['203.0.113.42'] },
+      tags: ['authentication'],
+      partner: 'northwind',
+      determination: 'unknown',
+      assigned_to: null,
+      assigned_username: null,
+      duplicate_count: 1,
+      created_at: now,
+      updated_at: now,
+    },
+  ]
+
+  const incidents = options.incidents ?? [
+    {
+      id: 'incident-1',
+      title: 'Northwind Workspace Incident',
+      description: null,
+      severity: 'high',
+      status: 'open',
+      assigned_to: null,
+      assigned_username: null,
+      tags: null,
+      alert_count: 1,
+      closed_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+    {
+      id: 'incident-2',
+      title: 'Global Incident',
+      description: null,
+      severity: 'medium',
+      status: 'open',
+      assigned_to: null,
+      assigned_username: null,
+      tags: null,
+      alert_count: 2,
+      closed_at: null,
+      created_at: now,
+      updated_at: now,
+    },
+  ]
+
+  const incidentAlerts = options.incidentAlerts ?? {
+    'incident-1': [alerts[0]],
+    'incident-2': [],
+  }
+
+  const incidentActivities = options.incidentActivities ?? {
+    'incident-1': [
+      {
+        id: 'incident-activity-1',
+        alert_id: null,
+        incident_id: 'incident-1',
+        analyst_id: 'analyst-admin',
+        analyst_username: 'admin',
+        action: 'incident_created',
+        detail: 'Incident created: Northwind Workspace Incident',
+        metadata_json: { incident_title: 'Northwind Workspace Incident' },
+        created_at: now,
+        updated_at: now,
+      },
+    ],
+    'incident-2': [],
+  }
+
+  const incidentObservables = options.incidentObservables ?? {
+    'incident-1': [],
+    'incident-2': [],
+  }
+
+  const incidentSuggestions = options.incidentSuggestions ?? [
+    {
+      source_ip: '203.0.113.42',
+      alert_count: 2,
+      alerts: alerts,
     },
   ]
 
@@ -301,6 +495,12 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
       last_enforcement_summary: null,
       notes: null,
     },
+    incidents,
+    alerts,
+    incidentAlerts,
+    incidentActivities,
+    incidentObservables,
+    incidentSuggestions,
   }
 }
 
@@ -465,54 +665,233 @@ export async function mockEnterpriseApi(
     if (method === 'GET' && pathname === '/api/v1/incidents') {
       const tenantId = new URL(request.url()).searchParams.get('tenant_id')
       const incidents = tenantId === 'tenant-1'
-        ? [
-            {
-              id: 'incident-1',
-              title: 'Northwind Workspace Incident',
-              description: null,
-              severity: 'high',
-              status: 'open',
-              assigned_to: null,
-              assigned_username: null,
-              tags: null,
-              alert_count: 1,
-              closed_at: null,
-              created_at: now,
-              updated_at: now,
-            },
-          ]
-        : [
-            {
-              id: 'incident-1',
-              title: 'Northwind Workspace Incident',
-              description: null,
-              severity: 'high',
-              status: 'open',
-              assigned_to: null,
-              assigned_username: null,
-              tags: null,
-              alert_count: 1,
-              closed_at: null,
-              created_at: now,
-              updated_at: now,
-            },
-            {
-              id: 'incident-2',
-              title: 'Global Incident',
-              description: null,
-              severity: 'medium',
-              status: 'open',
-              assigned_to: null,
-              assigned_username: null,
-              tags: null,
-              alert_count: 2,
-              closed_at: null,
-              created_at: now,
-              updated_at: now,
-            },
-          ]
+        ? state.incidents.filter((incident) => incident.id === 'incident-1')
+        : state.incidents
       await fulfillJson(route, { incidents, total: incidents.length })
       return
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/incidents/suggestions') {
+      await fulfillJson(route, state.incidentSuggestions)
+      return
+    }
+
+    if (method === 'POST' && pathname === '/api/v1/incidents') {
+      const body = requestBody(route)
+      const incident: IncidentInfo = {
+        id: nextId('incident'),
+        title: String(body.title ?? ''),
+        description: typeof body.description === 'string' ? body.description : null,
+        severity: typeof body.severity === 'string' ? body.severity : 'medium',
+        status: 'open',
+        assigned_to: null,
+        assigned_username: null,
+        tags: Array.isArray(body.tags) ? body.tags.map(String) : null,
+        alert_count: 0,
+        closed_at: null,
+        created_at: now,
+        updated_at: now,
+      }
+      state.incidents.unshift(incident)
+      state.incidentAlerts[incident.id] = []
+      state.incidentActivities[incident.id] = [
+        {
+          id: nextId('incident-activity'),
+          alert_id: null,
+          incident_id: incident.id,
+          analyst_id: state.analyst?.id ?? null,
+          analyst_username: state.analyst?.username ?? null,
+          action: 'incident_created',
+          detail: `Incident created: ${incident.title}`,
+          metadata_json: { incident_title: incident.title },
+          created_at: now,
+          updated_at: now,
+        },
+      ]
+      state.incidentObservables[incident.id] = []
+      await fulfillJson(route, incident, 201)
+      return
+    }
+
+    if (pathname.startsWith('/api/v1/incidents/')) {
+      const segments = pathname.split('/')
+      const incidentId = segments[segments.indexOf('incidents') + 1] ?? ''
+      const incident = state.incidents.find((item) => item.id === incidentId)
+      if (!incident) {
+        await fulfillJson(route, { detail: 'Incident not found' }, 404)
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/incidents/${incidentId}`) {
+        await fulfillJson(route, incident)
+        return
+      }
+
+      if (method === 'PATCH' && pathname === `/api/v1/incidents/${incidentId}`) {
+        const body = requestBody(route)
+        const oldStatus = incident.status
+        const oldAssignedUsername = incident.assigned_username
+
+        if (typeof body.status === 'string') {
+          incident.status = body.status
+        }
+        if (typeof body.severity === 'string') {
+          incident.severity = body.severity
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'assigned_to')) {
+          const assignedTo = typeof body.assigned_to === 'string' ? body.assigned_to : null
+          const assignedAnalyst = state.analysts.find((item) => item.id === assignedTo) ?? null
+          incident.assigned_to = assignedAnalyst?.id ?? null
+          incident.assigned_username = assignedAnalyst?.username ?? null
+        }
+        incident.updated_at = now
+
+        if (typeof body.status === 'string' && body.status !== oldStatus) {
+          state.incidentActivities[incidentId].unshift({
+            id: nextId('incident-activity'),
+            alert_id: null,
+            incident_id: incidentId,
+            analyst_id: state.analyst?.id ?? null,
+            analyst_username: state.analyst?.username ?? null,
+            action: 'status_change',
+            detail: `Status changed from ${oldStatus} to ${body.status}`,
+            metadata_json: { old: oldStatus, new: body.status },
+            created_at: now,
+            updated_at: now,
+          })
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'assigned_to')) {
+          state.incidentActivities[incidentId].unshift({
+            id: nextId('incident-activity'),
+            alert_id: null,
+            incident_id: incidentId,
+            analyst_id: state.analyst?.id ?? null,
+            analyst_username: state.analyst?.username ?? null,
+            action: 'assigned',
+            detail: incident.assigned_username ? `Assigned to ${incident.assigned_username}` : `Unassigned from ${oldAssignedUsername ?? 'unknown'}`,
+            metadata_json: {
+              old_username: oldAssignedUsername,
+              new_username: incident.assigned_username,
+            },
+            created_at: now,
+            updated_at: now,
+          })
+        }
+
+        await fulfillJson(route, incident)
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/incidents/${incidentId}/alerts`) {
+        await fulfillJson(route, state.incidentAlerts[incidentId] ?? [])
+        return
+      }
+
+      if (method === 'POST' && pathname === `/api/v1/incidents/${incidentId}/alerts`) {
+        const body = requestBody(route)
+        const alert = state.alerts.find((item) => item.id === String(body.alert_id ?? ''))
+        if (!alert) {
+          await fulfillJson(route, { detail: 'Alert not found' }, 404)
+          return
+        }
+        state.incidentAlerts[incidentId] = [...(state.incidentAlerts[incidentId] ?? []), alert]
+        incident.alert_count = state.incidentAlerts[incidentId].length
+        state.incidentActivities[incidentId].unshift({
+          id: nextId('incident-activity'),
+          alert_id: alert.id,
+          incident_id: incidentId,
+          analyst_id: state.analyst?.id ?? null,
+          analyst_username: state.analyst?.username ?? null,
+          action: 'alert_linked',
+          detail: `Linked alert ${alert.title}`,
+          metadata_json: { alert_id: alert.id, alert_title: alert.title },
+          created_at: now,
+          updated_at: now,
+        })
+        await fulfillJson(route, { detail: 'Alert linked to incident' }, 201)
+        return
+      }
+
+      if (method === 'DELETE' && pathname.includes('/alerts/')) {
+        const alertId = findId(pathname)
+        const alert = (state.incidentAlerts[incidentId] ?? []).find((item) => item.id === alertId) ?? null
+        state.incidentAlerts[incidentId] = (state.incidentAlerts[incidentId] ?? []).filter((item) => item.id !== alertId)
+        incident.alert_count = state.incidentAlerts[incidentId].length
+        if (alert) {
+          state.incidentActivities[incidentId].unshift({
+            id: nextId('incident-activity'),
+            alert_id: alert.id,
+            incident_id: incidentId,
+            analyst_id: state.analyst?.id ?? null,
+            analyst_username: state.analyst?.username ?? null,
+            action: 'alert_unlinked',
+            detail: `Unlinked alert ${alert.title}`,
+            metadata_json: { alert_id: alert.id, alert_title: alert.title },
+            created_at: now,
+            updated_at: now,
+          })
+        }
+        await fulfillJson(route, { detail: 'Alert unlinked from incident' })
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/incidents/${incidentId}/activities`) {
+        await fulfillJson(route, { activities: state.incidentActivities[incidentId] ?? [], total: (state.incidentActivities[incidentId] ?? []).length })
+        return
+      }
+
+      if (method === 'POST' && pathname === `/api/v1/incidents/${incidentId}/comments`) {
+        const body = requestBody(route)
+        const activity: ActivityInfo = {
+          id: nextId('incident-comment'),
+          alert_id: null,
+          incident_id: incidentId,
+          analyst_id: state.analyst?.id ?? null,
+          analyst_username: state.analyst?.username ?? null,
+          action: 'comment',
+          detail: String(body.text ?? ''),
+          metadata_json: null,
+          created_at: now,
+          updated_at: now,
+        }
+        state.incidentActivities[incidentId].unshift(activity)
+        await fulfillJson(route, activity)
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/incidents/${incidentId}/observables`) {
+        await fulfillJson(route, state.incidentObservables[incidentId] ?? [])
+        return
+      }
+
+      if (method === 'POST' && pathname === `/api/v1/incidents/${incidentId}/observables`) {
+        const body = requestBody(route)
+        const observable: ObservableInfo = {
+          id: nextId('observable'),
+          type: String(body.type ?? 'ip'),
+          value: String(body.value ?? ''),
+          source: typeof body.source === 'string' ? body.source : null,
+          enrichment_status: 'pending',
+          enrichments: [],
+          tags: null,
+          created_at: now,
+        }
+        state.incidentObservables[incidentId] = [observable, ...(state.incidentObservables[incidentId] ?? [])]
+        state.incidentActivities[incidentId].unshift({
+          id: nextId('incident-activity'),
+          alert_id: null,
+          incident_id: incidentId,
+          analyst_id: state.analyst?.id ?? null,
+          analyst_username: state.analyst?.username ?? null,
+          action: 'observable_added',
+          detail: `Added observable ${observable.type}:${observable.value}`,
+          metadata_json: { observable_type: observable.type, observable_value: observable.value },
+          created_at: now,
+          updated_at: now,
+        })
+        await fulfillJson(route, observable, 201)
+        return
+      }
     }
 
     if (method === 'GET' && pathname === '/api/v1/runs') {
