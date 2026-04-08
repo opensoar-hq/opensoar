@@ -22,10 +22,16 @@ The standard setup includes:
 ```text
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
+CELERY_BROKER_URL=redis://...
 PLAYBOOK_DIRS=/app/playbooks
 JWT_SECRET=...
 API_KEY_SECRET=...
 ```
+
+Notes:
+
+- `REDIS_URL` is used as the default Celery result backend.
+- `CELERY_BROKER_URL` can be set separately when you want the worker queue transport on a different Redis DB or instance.
 
 ## Volume Mounts
 

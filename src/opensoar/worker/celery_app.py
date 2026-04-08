@@ -4,7 +4,7 @@ from opensoar.config import settings
 
 celery_app = Celery(
     "opensoar",
-    broker=settings.redis_url,
+    broker=settings.effective_celery_broker_url,
     backend=settings.redis_url,
 )
 

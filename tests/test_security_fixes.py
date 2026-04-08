@@ -110,6 +110,33 @@ class TestJWTSecretValidation:
         with pytest.raises(ValueError, match="[Aa][Pp][Ii]"):
             Settings(jwt_secret="ok-secret", api_key_secret="")
 
+    def test_celery_broker_url_defaults_to_redis_url(self, monkeypatch):
+        """Broker should fall back to redis_url when CELERY_BROKER_URL is unset."""
+        from opensoar.config import Settings
+
+        monkeypatch.delenv("JWT_SECRET", raising=False)
+        monkeypatch.delenv("API_KEY_SECRET", raising=False)
+        settings = Settings(
+            jwt_secret="ok-secret",
+            api_key_secret="test-key",
+            redis_url="redis://localhost:6379/0",
+        )
+        assert settings.effective_celery_broker_url == "redis://localhost:6379/0"
+
+    def test_celery_broker_url_override_is_honored(self, monkeypatch):
+        """Broker should use CELERY_BROKER_URL when provided."""
+        from opensoar.config import Settings
+
+        monkeypatch.delenv("JWT_SECRET", raising=False)
+        monkeypatch.delenv("API_KEY_SECRET", raising=False)
+        settings = Settings(
+            jwt_secret="ok-secret",
+            api_key_secret="test-key",
+            redis_url="redis://localhost:6379/0",
+            celery_broker_url="redis://localhost:6379/1",
+        )
+        assert settings.effective_celery_broker_url == "redis://localhost:6379/1"
+
 
 # ── Fix 3: API key expiry validation ────────────────────────────
 

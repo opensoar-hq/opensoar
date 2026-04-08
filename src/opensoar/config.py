@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://opensoar:opensoar@localhost:5432/opensoar"
     redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str | None = None
     playbook_dirs: str = "playbooks"
     integration_dirs: str = ""
     local_login_enabled: bool = True
@@ -46,6 +47,10 @@ class Settings(BaseSettings):
         return self.database_url.replace("+asyncpg", "+psycopg2").replace(
             "postgresql+psycopg2", "postgresql"
         )
+
+    @property
+    def effective_celery_broker_url(self) -> str:
+        return self.celery_broker_url or self.redis_url
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
