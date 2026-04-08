@@ -81,6 +81,19 @@ jobs:
           API_KEY_SECRET: test-api-key-secret
         run: docker compose up -d postgres redis
 
+      - name: Wait for Postgres readiness
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose exec -T postgres pg_isready -U opensoar >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Postgres did not become ready in time"
+          docker compose ps
+          docker compose logs postgres
+          exit 1
+
       - name: Seed previous schema revision
         env:
           DATABASE_URL: postgresql+asyncpg://opensoar:opensoar_dev@localhost:5433/opensoar
