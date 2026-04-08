@@ -78,6 +78,7 @@ async def _execute_sequence(
     registry.discover()
 
     pb_registry = get_playbook_registry()
+    sequence_id = uuid.uuid4()
     engine = None
     if session_factory is None:
         engine = create_async_engine(settings.database_url)
@@ -89,6 +90,7 @@ async def _execute_sequence(
         executor = PlaybookExecutor(session)
 
         for playbook_name in playbook_names:
+            position = len(results) + 1
             pb = pb_registry.get(playbook_name)
             if not pb:
                 raise ValueError(f"Playbook '{playbook_name}' not found in registry")
@@ -96,11 +98,17 @@ async def _execute_sequence(
             run = await executor.execute(
                 pb,
                 alert_id=uuid.UUID(alert_id) if alert_id else None,
+                sequence_id=sequence_id,
+                sequence_position=position,
+                sequence_total=len(playbook_names),
             )
             results.append(
                 {
                     "playbook_name": playbook_name,
                     "run_id": str(run.id),
+                    "sequence_id": str(sequence_id),
+                    "sequence_position": position,
+                    "sequence_total": len(playbook_names),
                     "status": run.status,
                     "error": run.error,
                 }

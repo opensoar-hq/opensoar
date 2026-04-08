@@ -26,6 +26,9 @@ class PlaybookRunResponse(BaseModel):
     id: uuid.UUID
     playbook_id: uuid.UUID
     alert_id: uuid.UUID | None = None
+    sequence_id: uuid.UUID | None = None
+    sequence_position: int | None = None
+    sequence_total: int | None = None
     status: str
     started_at: datetime | None = None
     finished_at: datetime | None = None

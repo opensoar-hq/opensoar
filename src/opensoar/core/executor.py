@@ -31,6 +31,9 @@ class PlaybookExecutor:
         playbook: RegisteredPlaybook,
         alert_id: uuid.UUID | None = None,
         manual_input: dict | None = None,
+        sequence_id: uuid.UUID | None = None,
+        sequence_position: int | None = None,
+        sequence_total: int | None = None,
     ) -> PlaybookRun:
         pb_def = await self.session.execute(
             select(PlaybookDefinition).where(PlaybookDefinition.name == playbook.meta.name)
@@ -42,6 +45,9 @@ class PlaybookExecutor:
         run = PlaybookRun(
             playbook_id=pb_row.id,
             alert_id=alert_id,
+            sequence_id=sequence_id,
+            sequence_position=sequence_position,
+            sequence_total=sequence_total,
             status="running",
             started_at=datetime.now(timezone.utc),
         )

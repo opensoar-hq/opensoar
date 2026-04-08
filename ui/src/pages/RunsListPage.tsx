@@ -197,7 +197,9 @@ export function RunsListPage() {
                       </span>
 
                       <span className="w-20 shrink-0 text-xs text-muted">
-                        {run.action_results.length} step{run.action_results.length !== 1 ? 's' : ''}
+                        {run.sequence_position && run.sequence_total
+                          ? `${run.sequence_position}/${run.sequence_total}`
+                          : `${run.action_results.length} step${run.action_results.length !== 1 ? 's' : ''}`}
                       </span>
 
                       <span className="w-24 shrink-0 text-xs" onClick={(e) => e.stopPropagation()}>

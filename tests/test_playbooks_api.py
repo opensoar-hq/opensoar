@@ -93,6 +93,37 @@ class TestPlaybookAPI:
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
+    async def test_list_playbooks_is_sorted_by_execution_order(self, client, db_session_factory, registered_analyst):
+        from opensoar.models.playbook import PlaybookDefinition
+
+        async with db_session_factory() as session:
+            session.add_all([
+                PlaybookDefinition(
+                    name="ordered_second_api_pb",
+                    execution_order=20,
+                    module_path="test",
+                    function_name="second_fn",
+                    trigger_type="webhook",
+                    trigger_config={},
+                    enabled=True,
+                ),
+                PlaybookDefinition(
+                    name="ordered_first_api_pb",
+                    execution_order=10,
+                    module_path="test",
+                    function_name="first_fn",
+                    trigger_type="webhook",
+                    trigger_config={},
+                    enabled=True,
+                ),
+            ])
+            await session.commit()
+
+        resp = await client.get("/api/v1/playbooks", headers=registered_analyst["headers"])
+        assert resp.status_code == 200
+        names = [pb["name"] for pb in resp.json() if pb["name"] in {"ordered_first_api_pb", "ordered_second_api_pb"}]
+        assert names == ["ordered_first_api_pb", "ordered_second_api_pb"]
+
     async def test_update_playbook_enabled(self, client, db_session_factory, registered_admin):
         """PATCH /playbooks/{id} should toggle enabled field."""
         from opensoar.models.playbook import PlaybookDefinition

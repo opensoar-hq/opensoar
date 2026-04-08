@@ -408,3 +408,6 @@ class TestPlaybookRuntime:
             "sequence_first",
             "sequence_second",
         ]
+        assert result["results"][0]["sequence_position"] == 1
+        assert result["results"][1]["sequence_position"] == 2
+        assert result["results"][0]["sequence_total"] == 2

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, ToggleLeft, ToggleRight, Zap, Play } from 'lucide-react'
-import { api } from '@/api'
+import { api, type Playbook } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
@@ -19,7 +19,7 @@ function PlaybookCard({
   ownerOptions,
   canManageOwnership,
 }: {
-  playbook: Parameters<typeof api.playbooks.update>[1] & { id: string; name: string; description: string | null; partner: string | null; module_path: string; function_name: string; trigger_type: string | null; trigger_config: Record<string, unknown>; enabled: boolean; version: number }
+  playbook: Playbook
   ownerOptions: { value: string; label: string }[]
   canManageOwnership: boolean
 }) {
@@ -63,6 +63,9 @@ function PlaybookCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-medium text-heading">{playbook.name}</span>
+              <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-hover text-muted">
+                #{playbook.execution_order}
+              </span>
               {playbook.trigger_type && (
                 <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-accent/15 text-accent">
                   <Zap size={10} /> {playbook.trigger_type}
@@ -82,6 +85,10 @@ function PlaybookCard({
 
             <div className="mt-2 text-[11px] text-muted">
               Owner: {playbook.partner || 'Global / unowned'}
+            </div>
+
+            <div className="mt-1 text-[11px] text-muted">
+              Execution order: {playbook.execution_order}
             </div>
 
             {canManageOwnership && (

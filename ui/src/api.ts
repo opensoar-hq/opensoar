@@ -92,6 +92,7 @@ export interface Playbook {
   name: string
   description: string | null
   partner: string | null
+  execution_order: number
   module_path: string
   function_name: string
   trigger_type: string | null
@@ -118,6 +119,9 @@ export interface PlaybookRun {
   id: string
   playbook_id: string
   alert_id: string | null
+  sequence_id: string | null
+  sequence_position: number | null
+  sequence_total: number | null
   status: string
   started_at: string | null
   finished_at: string | null

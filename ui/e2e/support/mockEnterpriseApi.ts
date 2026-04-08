@@ -115,6 +115,7 @@ interface MockEnterpriseState {
     name: string
     description: string | null
     partner: string | null
+    execution_order: number
     module_path: string
     function_name: string
     trigger_type: string | null
@@ -152,6 +153,7 @@ interface MockEnterpriseOptions {
     name: string
     description: string | null
     partner: string | null
+    execution_order: number
     module_path: string
     function_name: string
     trigger_type: string | null
@@ -244,6 +246,7 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
         name: 'Northwind Playbook',
         description: null,
         partner: 'northwind',
+        execution_order: 10,
         module_path: 'playbooks.northwind',
         function_name: 'run',
         trigger_type: 'webhook',
@@ -257,6 +260,7 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
         name: 'Global Playbook',
         description: null,
         partner: null,
+        execution_order: 20,
         module_path: 'playbooks.global',
         function_name: 'run',
         trigger_type: 'webhook',
@@ -519,6 +523,9 @@ export async function mockEnterpriseApi(
               id: 'run-1',
               playbook_id: 'playbook-1',
               alert_id: 'alert-1',
+              sequence_id: 'sequence-1',
+              sequence_position: 1,
+              sequence_total: 2,
               status: 'completed',
               started_at: now,
               finished_at: now,
@@ -533,6 +540,9 @@ export async function mockEnterpriseApi(
               id: 'run-1',
               playbook_id: 'playbook-1',
               alert_id: 'alert-1',
+              sequence_id: 'sequence-1',
+              sequence_position: 1,
+              sequence_total: 2,
               status: 'completed',
               started_at: now,
               finished_at: now,
@@ -545,6 +555,9 @@ export async function mockEnterpriseApi(
               id: 'run-2',
               playbook_id: 'playbook-2',
               alert_id: 'alert-2',
+              sequence_id: 'sequence-1',
+              sequence_position: 2,
+              sequence_total: 2,
               status: 'failed',
               started_at: now,
               finished_at: now,

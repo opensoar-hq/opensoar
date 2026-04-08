@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,9 @@ class PlaybookRun(Base):
     error: Mapped[str | None] = mapped_column(Text)
     result: Mapped[dict | None] = mapped_column(JSONB)
     celery_task_id: Mapped[str | None] = mapped_column(String(255))
+    sequence_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
+    sequence_position: Mapped[int | None] = mapped_column(Integer)
+    sequence_total: Mapped[int | None] = mapped_column(Integer)
 
     action_results: Mapped[list["ActionResult"]] = relationship(
         "ActionResult", back_populates="run", lazy="selectin"

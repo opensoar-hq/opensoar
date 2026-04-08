@@ -63,6 +63,11 @@ export function RunDetailPage() {
                 <Clock size={12} /> {timeAgo(run.created_at)}
               </span>
             </Tooltip>
+            {run.sequence_position && run.sequence_total && (
+              <span>
+                Sequence: <span className="font-mono text-heading">{run.sequence_position} / {run.sequence_total}</span>
+              </span>
+            )}
             <span>
               Duration: <span className="font-mono text-heading">{formatDuration(run.started_at, run.finished_at)}</span>
             </span>

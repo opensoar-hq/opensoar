@@ -190,8 +190,17 @@ test('assigns ownership to a global playbook', async ({ page }) => {
   await page.goto('/playbooks')
 
   await expect(page.getByText('Global Playbook')).toBeVisible()
+  await expect(page.getByText('Execution order: 20')).toBeVisible()
   await page.getByLabel('Assign owner').first().selectOption('northwind')
   await expect(page.getByText('Owner: northwind')).toBeVisible()
+})
+
+test('shows run sequence position on the runs page', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/runs')
+
+  await expect(page.getByText('1/2')).toBeVisible()
+  await expect(page.getByText('2/2')).toBeVisible()
 })
 
 test('assigns ownership to a global integration and shows migration queue', async ({ page }) => {
