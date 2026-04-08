@@ -233,6 +233,20 @@ test('manages incident collaboration workflow from the incident detail page', as
   await expect(page.getByText('ip:198.51.100.23', { exact: true })).toBeVisible()
 })
 
+test('creates an incident from a correlation suggestion', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/incidents')
+
+  await expect(page.getByRole('heading', { name: 'Incidents' })).toBeVisible()
+  await expect(page.getByText('Correlation Suggestions')).toBeVisible()
+  await expect(page.getByText('203.0.113.42', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Create Incident' }).click()
+  await expect(page).toHaveURL(/\/incidents\/incident-/)
+  await expect(page.getByRole('heading', { name: 'Correlated activity from 203.0.113.42' })).toBeVisible()
+  await expect(page.getByText('Northwind suspicious login', { exact: true })).toBeVisible()
+})
+
 test('tenant admin only sees enterprise settings tab', async ({ page }) => {
   await mockEnterpriseApi(page, {
     analyst: {
