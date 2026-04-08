@@ -188,9 +188,26 @@ jobs:
           OPENSOAR_DIR: /tmp/opensoar-install
         run: docker compose -f "$OPENSOAR_DIR/docker-compose.yml" --env-file "$OPENSOAR_DIR/.env" down -v
 
+  helm-packaging-smoke:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Validate Helm chart renders expected packaging objects
+        run: |
+          helm lint ./helm/opensoar
+          helm template opensoar ./helm/opensoar > /tmp/opensoar-helm.yaml
+          grep -q 'kind: Job' /tmp/opensoar-helm.yaml
+          grep -q 'helm.sh/hook.*pre-install,pre-upgrade' /tmp/opensoar-helm.yaml
+          grep -q 'name: API_KEY_SECRET' /tmp/opensoar-helm.yaml
+          grep -q 'name: PLAYBOOK_DIRS' /tmp/opensoar-helm.yaml
+          grep -q 'app.kubernetes.io/component: worker' /tmp/opensoar-helm.yaml
+
   build:
     runs-on: ubuntu-latest
-    needs: [test, compose-upgrade-smoke, deploy-install-smoke]
+    needs: [test, compose-upgrade-smoke, deploy-install-smoke, helm-packaging-smoke]
     if: github.event_name == 'push'
     permissions:
       contents: read
