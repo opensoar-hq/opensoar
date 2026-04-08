@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History, UserCheck, Users } from 'lucide-react'
-import { api, type Alert, type Activity, type Analyst } from '@/api'
+import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History, UserCheck, Users, Search } from 'lucide-react'
+import { api, type Alert, type Activity, type Analyst, type Observable } from '@/api'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
+import { Select } from '@/components/ui/Select'
 import { Table, TableHeader, TableBody, TableHead, TableCell, TableHeaderRow } from '@/components/ui/Table'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
 import { Tooltip } from '@/components/ui/Tooltip'
@@ -26,6 +27,7 @@ const ACTION_LABELS: Record<string, string> = {
   assigned: 'Assignment Updated',
   alert_linked: 'Alert Linked',
   alert_unlinked: 'Alert Unlinked',
+  observable_added: 'Observable Added',
   comment: 'Comment',
 }
 
@@ -37,6 +39,7 @@ const ACTION_COLORS: Record<string, string> = {
   assigned: 'var(--color-info)',
   alert_linked: 'var(--color-info)',
   alert_unlinked: 'var(--color-danger)',
+  observable_added: 'var(--color-info)',
   comment: 'var(--color-text)',
 }
 
@@ -174,6 +177,11 @@ export function IncidentDetailPage() {
   const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [linkAlertId, setLinkAlertId] = useState('')
   const [commentText, setCommentText] = useState('')
+  const [observableForm, setObservableForm] = useState({
+    type: 'ip',
+    value: '',
+    source: '',
+  })
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ['incident', id],
@@ -193,6 +201,12 @@ export function IncidentDetailPage() {
     enabled: !!id,
   })
 
+  const { data: observables } = useQuery({
+    queryKey: ['incident-observables', id],
+    queryFn: () => api.incidents.observables(id!),
+    enabled: !!id,
+  })
+
   const { data: analysts } = useQuery({
     queryKey: ['analysts'],
     queryFn: api.analysts.list,
@@ -202,6 +216,7 @@ export function IncidentDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['incident', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-alerts', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-activities', id] })
+    queryClient.invalidateQueries({ queryKey: ['incident-observables', id] })
     queryClient.invalidateQueries({ queryKey: ['incidents'] })
   }
 
@@ -247,6 +262,20 @@ export function IncidentDetailPage() {
       toast.success('Comment added')
     },
     onError: () => toast.error('Failed to add comment'),
+  })
+
+  const observableMutation = useMutation({
+    mutationFn: () => api.incidents.createObservable(id!, {
+      type: observableForm.type,
+      value: observableForm.value.trim(),
+      source: observableForm.source.trim() || undefined,
+    }),
+    onSuccess: () => {
+      invalidateIncident()
+      setObservableForm({ type: 'ip', value: '', source: '' })
+      toast.success('Observable added')
+    },
+    onError: () => toast.error('Failed to add observable'),
   })
 
   if (isLoading) {
@@ -410,6 +439,71 @@ export function IncidentDetailPage() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </StaggerChild>
+
+        <StaggerChild>
+          <Card>
+            <CardHeader>
+              <CardTitle>Observables</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-[120px_minmax(0,1fr)_160px_auto] gap-2">
+                <Select
+                  value={observableForm.type}
+                  onChange={(value: string) => setObservableForm((current) => ({ ...current, type: value }))}
+                  options={[
+                    { value: 'ip', label: 'IP' },
+                    { value: 'domain', label: 'Domain' },
+                    { value: 'url', label: 'URL' },
+                    { value: 'hash', label: 'Hash' },
+                    { value: 'email', label: 'Email' },
+                  ]}
+                />
+                <Input
+                  value={observableForm.value}
+                  onChange={(e) => setObservableForm((current) => ({ ...current, value: e.target.value }))}
+                  placeholder="Observable value"
+                />
+                <Input
+                  value={observableForm.source}
+                  onChange={(e) => setObservableForm((current) => ({ ...current, source: e.target.value }))}
+                  placeholder="Source"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => observableMutation.mutate()}
+                  disabled={!observableForm.value.trim() || observableMutation.isPending}
+                >
+                  <Search size={13} /> Add
+                </Button>
+              </div>
+
+              {(!observables || observables.length === 0) ? (
+                <div className="text-xs text-muted">No incident observables yet.</div>
+              ) : (
+                <div className="space-y-2">
+                  {observables.map((observable: Observable) => (
+                    <div
+                      key={observable.id}
+                      className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-sm text-heading font-medium break-all">
+                          {observable.type}:{observable.value}
+                        </div>
+                        <div className="text-[11px] text-muted mt-0.5">
+                          {observable.source || 'manual'} · {observable.enrichment_status}
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-muted whitespace-nowrap">
+                        {timeAgo(observable.created_at)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

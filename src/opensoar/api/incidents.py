@@ -16,6 +16,7 @@ from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
+from opensoar.models.observable import Observable
 from opensoar.schemas.activity import ActivityList, ActivityResponse, CommentCreate, CommentUpdate
 from opensoar.schemas.alert import AlertResponse
 from opensoar.schemas.incident import (
@@ -25,6 +26,7 @@ from opensoar.schemas.incident import (
     IncidentUpdate,
     LinkAlertRequest,
 )
+from opensoar.schemas.observable import ObservableCreate, ObservableResponse
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
@@ -502,6 +504,113 @@ async def unlink_alert(
     await session.delete(link)
     await session.commit()
     return {"detail": "Alert unlinked from incident"}
+
+
+@router.get("/{incident_id}/observables", response_model=list[ObservableResponse])
+async def list_incident_observables(
+    incident_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    query = (
+        select(Observable)
+        .where(Observable.incident_id == incident_id)
+        .order_by(Observable.created_at.desc())
+    )
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="observable",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    result = await session.execute(query)
+    observables = result.scalars().all()
+    return [ObservableResponse.model_validate(observable) for observable in observables]
+
+
+@router.post("/{incident_id}/observables", response_model=ObservableResponse, status_code=201)
+async def create_incident_observable(
+    incident_id: uuid.UUID,
+    data: ObservableCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.OBSERVABLES_MANAGE)),
+):
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    existing = await session.execute(
+        select(Observable).where(
+            Observable.type == data.type,
+            Observable.value == data.value,
+            Observable.incident_id == incident_id,
+        )
+    )
+    observable = existing.scalar_one_or_none()
+    if observable:
+        return ObservableResponse.model_validate(observable)
+
+    observable = Observable(
+        type=data.type,
+        value=data.value,
+        source=data.source,
+        incident_id=incident_id,
+    )
+    await enforce_tenant_access(
+        request.app,
+        resource=observable,
+        resource_type="observable",
+        action="create",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    session.add(observable)
+    await session.flush()
+    _append_incident_activity(
+        session,
+        incident_id=incident_id,
+        analyst=analyst,
+        action="observable_added",
+        detail=f"Added observable {data.type}:{data.value}",
+        metadata_json={"observable_type": data.type, "observable_value": data.value},
+    )
+    await session.commit()
+    await session.refresh(observable)
+    return ObservableResponse.model_validate(observable)
 
 
 @router.get("/{incident_id}/activities", response_model=ActivityList)

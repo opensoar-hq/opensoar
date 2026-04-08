@@ -494,6 +494,9 @@ export const api = {
       postJSON<Activity>(`/incidents/${id}/comments`, { text }),
     editComment: (id: string, commentId: string, text: string) =>
       patchJSON<Activity>(`/incidents/${id}/comments/${commentId}`, { text }),
+    observables: (id: string) => fetchJSON<Observable[]>(`/incidents/${id}/observables`),
+    createObservable: (id: string, data: { type: string; value: string; source?: string }) =>
+      postJSON<Observable>(`/incidents/${id}/observables`, data),
     linkAlert: (id: string, alertId: string) =>
       postJSON<{ detail: string }>(`/incidents/${id}/alerts`, { alert_id: alertId }),
     unlinkAlert: (id: string, alertId: string) =>

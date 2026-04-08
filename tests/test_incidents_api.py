@@ -338,3 +338,75 @@ class TestIncidentActivities:
         actions = [activity["action"] for activity in activities.json()["activities"]]
         assert "alert_linked" in actions
         assert "alert_unlinked" in actions
+
+
+class TestIncidentObservables:
+    async def test_create_and_list_incident_observables(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Observable Incident", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        observable = await client.post(
+            f"/api/v1/incidents/{incident_id}/observables",
+            json={"type": "ip", "value": "203.0.113.88", "source": "manual"},
+            headers=registered_analyst["headers"],
+        )
+        assert observable.status_code == 201
+        assert observable.json()["type"] == "ip"
+        assert observable.json()["value"] == "203.0.113.88"
+
+        listed = await client.get(
+            f"/api/v1/incidents/{incident_id}/observables",
+            headers=registered_analyst["headers"],
+        )
+        assert listed.status_code == 200
+        observables = listed.json()
+        assert len(observables) == 1
+        assert observables[0]["value"] == "203.0.113.88"
+
+    async def test_dedup_incident_observable_per_incident(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Observable Dedup", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        body = {"type": "domain", "value": "evil.example.com", "source": "manual"}
+        first = await client.post(
+            f"/api/v1/incidents/{incident_id}/observables",
+            json=body,
+            headers=registered_analyst["headers"],
+        )
+        second = await client.post(
+            f"/api/v1/incidents/{incident_id}/observables",
+            json=body,
+            headers=registered_analyst["headers"],
+        )
+
+        assert first.json()["id"] == second.json()["id"]
+
+    async def test_incident_observable_adds_timeline_activity(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Observable Activity", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        observable = await client.post(
+            f"/api/v1/incidents/{incident_id}/observables",
+            json={"type": "url", "value": "https://evil.example.com", "source": "manual"},
+            headers=registered_analyst["headers"],
+        )
+        assert observable.status_code == 201
+
+        activities = await client.get(
+            f"/api/v1/incidents/{incident_id}/activities",
+            headers=registered_analyst["headers"],
+        )
+        actions = [activity["action"] for activity in activities.json()["activities"]]
+        assert "observable_added" in actions
