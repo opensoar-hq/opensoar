@@ -97,6 +97,30 @@ await update_current_alert(
 
 Use this when the automation has done useful work but the alert should stay open.
 
+### Commenting On The Current Alert
+
+If a playbook wants to leave a note for the next human or for auditability:
+
+```python
+from opensoar import add_current_alert_comment
+
+await add_current_alert_comment(
+    "Playbook completed triage and left this for analyst follow-up",
+)
+```
+
+### Assigning The Current Alert
+
+If a playbook wants to hand the current alert to a specific analyst:
+
+```python
+from opensoar import assign_current_alert
+
+await assign_current_alert(username="dutyanalyst")
+```
+
+Calling `assign_current_alert()` with no arguments unassigns the current alert.
+
 ## Recommended Workflow
 
 1. Write a playbook in `playbooks/` or another configured directory.

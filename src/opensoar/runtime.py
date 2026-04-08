@@ -10,6 +10,7 @@ from opensoar.core.decorators import get_execution_context
 from opensoar.db import async_session
 from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
+from opensoar.models.analyst import Analyst
 
 VALID_ALERT_STATUSES = {"new", "in_progress", "resolved"}
 VALID_DETERMINATIONS = {"unknown", "malicious", "suspicious", "benign"}
@@ -20,6 +21,33 @@ def get_current_alert_id() -> str | None:
     if ctx is None or ctx.alert_id is None:
         return None
     return str(ctx.alert_id)
+
+
+async def _with_current_alert(handler):
+    ctx = get_execution_context()
+    if ctx is None or ctx.alert_id is None:
+        raise RuntimeError("No current alert is bound to this execution context")
+
+    alert_id = uuid.UUID(str(ctx.alert_id))
+    existing_session = ctx.session
+    if existing_session is not None:
+        session = existing_session
+        result = await session.execute(select(Alert).where(Alert.id == alert_id))
+        alert = result.scalar_one_or_none()
+        if alert is None:
+            raise RuntimeError("Current alert not found")
+        payload = await handler(session, alert)
+        await session.flush()
+        return payload
+
+    async with async_session() as session:
+        result = await session.execute(select(Alert).where(Alert.id == alert_id))
+        alert = result.scalar_one_or_none()
+        if alert is None:
+            raise RuntimeError("Current alert not found")
+        payload = await handler(session, alert)
+        await session.commit()
+        return payload
 
 
 def _apply_alert_update(
@@ -190,3 +218,96 @@ async def resolve_current_alert(
         activity_detail=activity_detail,
         activity_metadata=activity_metadata,
     )
+
+
+async def add_current_alert_comment(
+    text: str,
+    *,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Add a comment activity to the current alert."""
+
+    if not text.strip():
+        raise ValueError("comment text must not be empty")
+
+    async def handler(session, alert):
+        activity = Activity(
+            alert_id=alert.id,
+            action="comment",
+            detail=text.strip(),
+            metadata_json=metadata or {"source": "playbook"},
+        )
+        session.add(activity)
+        await session.flush()
+        return {
+            "alert_id": str(alert.id),
+            "comment_id": str(activity.id),
+            "action": activity.action,
+            "detail": activity.detail,
+        }
+
+    return await _with_current_alert(handler)
+
+
+async def assign_current_alert(
+    *,
+    analyst_id: str | None = None,
+    username: str | None = None,
+) -> dict[str, Any]:
+    """Assign or unassign the current alert."""
+
+    if analyst_id and username:
+        raise ValueError("Provide either analyst_id or username, not both")
+
+    async def handler(session, alert):
+        if not analyst_id and not username:
+            alert.assigned_to = None
+            alert.assigned_username = None
+            session.add(
+                Activity(
+                    alert_id=alert.id,
+                    action="assigned",
+                    detail="Alert unassigned by playbook",
+                    metadata_json={"source": "playbook", "assigned_to": None},
+                )
+            )
+            return {
+                "alert_id": str(alert.id),
+                "assigned_to": None,
+                "assigned_username": None,
+            }
+
+        query = select(Analyst).where(Analyst.is_active.is_(True))
+        if analyst_id:
+            query = query.where(Analyst.id == uuid.UUID(analyst_id))
+        else:
+            query = query.where(Analyst.username == username)
+
+        assignee = (await session.execute(query)).scalar_one_or_none()
+        if assignee is None:
+            raise RuntimeError("Target analyst not found or inactive")
+
+        alert.assigned_to = assignee.id
+        alert.assigned_username = assignee.username
+        if alert.status == "new":
+            alert.status = "in_progress"
+
+        session.add(
+            Activity(
+                alert_id=alert.id,
+                action="assigned",
+                detail=f"Assigned to {assignee.username} by playbook",
+                metadata_json={
+                    "source": "playbook",
+                    "assigned_to": str(assignee.id),
+                    "assigned_username": assignee.username,
+                },
+            )
+        )
+        return {
+            "alert_id": str(alert.id),
+            "assigned_to": str(assignee.id),
+            "assigned_username": assignee.username,
+        }
+
+    return await _with_current_alert(handler)

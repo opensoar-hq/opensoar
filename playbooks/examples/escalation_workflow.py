@@ -7,7 +7,7 @@ notification if configured.
 
 import logging
 
-from opensoar import action, playbook
+from opensoar import action, assign_current_alert, playbook
 
 logger = logging.getLogger(__name__)
 
@@ -41,36 +41,9 @@ async def find_duty_analyst() -> dict:
 @action(name="assign_alert", timeout=10)
 async def assign_alert(alert_id: str, analyst_id: str, analyst_username: str) -> dict:
     """Assign an alert to a specific analyst."""
-    import uuid
-
-    from sqlalchemy import select
-
-    from opensoar.db import async_session
-    from opensoar.models.activity import Activity
-    from opensoar.models.alert import Alert
-
-    async with async_session() as session:
-        result = await session.execute(
-            select(Alert).where(Alert.id == uuid.UUID(alert_id))
-        )
-        alert = result.scalar_one_or_none()
-        if not alert:
-            return {"assigned": False, "error": "Alert not found"}
-
-        alert.assigned_to = uuid.UUID(analyst_id)
-        alert.assigned_username = analyst_username
-        if alert.status == "new":
-            alert.status = "in_progress"
-
-        session.add(Activity(
-            alert_id=alert.id,
-            action="assigned",
-            detail=f"Auto-escalated and assigned to {analyst_username}",
-            metadata_json={"auto_escalated": True},
-        ))
-
-        await session.commit()
-        return {"assigned": True, "to": analyst_username}
+    del alert_id
+    result = await assign_current_alert(analyst_id=analyst_id)
+    return {"assigned": True, "to": result["assigned_username"] or analyst_username}
 
 
 @action(name="send_escalation_notification", timeout=15, retries=1)
