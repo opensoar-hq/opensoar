@@ -121,6 +121,8 @@ await assign_current_alert(username="dutyanalyst")
 
 Calling `assign_current_alert()` with no arguments unassigns the current alert.
 
+For the broader status/determination model, read [Alert Lifecycle](../alerts/lifecycle.md).
+
 ## Recommended Workflow
 
 1. Write a playbook in `playbooks/` or another configured directory.
