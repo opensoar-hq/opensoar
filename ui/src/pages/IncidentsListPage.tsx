@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
-import { Briefcase, Clock, UserCheck, Plus } from 'lucide-react'
-import { api } from '@/api'
+import { Briefcase, Clock, UserCheck, Plus, Link2, Globe } from 'lucide-react'
+import { api, type IncidentSuggestion } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFoo
 import { PageTransition } from '@/components/ui/PageTransition'
 import { useToast } from '@/components/ui/Toast'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
-import { timeAgo } from '@/lib/utils'
+import { cn, timeAgo } from '@/lib/utils'
 
 function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
@@ -104,6 +104,8 @@ function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () =>
 
 export function IncidentsListPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const toast = useToast()
   const { selectedTenantId } = useWorkspace()
   const [filters, setFilters] = useState<{ severity?: string; status?: string }>({})
   const [page, setPage] = useState(0)
@@ -115,7 +117,36 @@ export function IncidentsListPage() {
     queryFn: () => api.incidents.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
 
+  const { data: suggestions, isLoading: suggestionsLoading } = useQuery({
+    queryKey: ['incident-suggestions', selectedTenantId],
+    queryFn: () => api.incidents.suggestions(),
+  })
+
+  const suggestionMutation = useMutation({
+    mutationFn: async (suggestion: IncidentSuggestion) => {
+      const incident = await api.incidents.create({
+        title: `Correlated activity from ${suggestion.source_ip}`,
+        severity: 'high',
+        description: `Suggested incident created from ${suggestion.alert_count} unlinked alerts sharing source IP ${suggestion.source_ip}.`,
+      })
+
+      for (const alert of suggestion.alerts) {
+        await api.incidents.linkAlert(incident.id, alert.id)
+      }
+
+      return incident
+    },
+    onSuccess: (incident) => {
+      queryClient.invalidateQueries({ queryKey: ['incidents'] })
+      queryClient.invalidateQueries({ queryKey: ['incident-suggestions'] })
+      toast.success(`Created ${incident.title}`)
+      navigate(`/incidents/${incident.id}`)
+    },
+    onError: () => toast.error('Failed to create incident from suggestion'),
+  })
+
   const incidents = data?.incidents ?? []
+  const groupedSuggestions = suggestions ?? []
 
   return (
     <PageTransition>
@@ -148,6 +179,61 @@ export function IncidentsListPage() {
           </Button>
         </div>
       </PageHeader>
+
+      {!suggestionsLoading && groupedSuggestions.length > 0 && (
+        <div className="mb-4 rounded-lg border border-border bg-surface px-4 py-3">
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div>
+              <div className="text-sm font-semibold text-heading">Correlation Suggestions</div>
+              <div className="text-xs text-muted">Unlinked alert groups that likely belong in the same incident.</div>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {groupedSuggestions.map((suggestion) => (
+              <div
+                key={suggestion.source_ip}
+                className="flex items-start justify-between gap-3 rounded-md border border-border px-3 py-3"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm text-heading font-medium">
+                    <Globe size={13} className="text-accent" />
+                    <span className="font-mono">{suggestion.source_ip}</span>
+                  </div>
+                  <div className="text-xs text-muted mt-1">
+                    {suggestion.alert_count} unlinked alert{suggestion.alert_count !== 1 ? 's' : ''}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {suggestion.alerts.slice(0, 3).map((alert) => (
+                      <button
+                        key={alert.id}
+                        onClick={() => navigate(`/alerts/${alert.id}`)}
+                        className={cn(
+                          'px-2 py-1 rounded-md text-[11px] text-left',
+                          'bg-bg border border-border hover:border-accent/40 hover:bg-surface-hover',
+                          'cursor-pointer transition-colors',
+                        )}
+                      >
+                        {alert.title}
+                      </button>
+                    ))}
+                    {suggestion.alerts.length > 3 && (
+                      <span className="px-2 py-1 text-[11px] text-muted">+{suggestion.alerts.length - 3} more</span>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => suggestionMutation.mutate(suggestion)}
+                  disabled={suggestionMutation.isPending}
+                >
+                  <Link2 size={13} /> Create Incident
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isLoading && <TableSkeleton rows={8} cols={6} />}
 

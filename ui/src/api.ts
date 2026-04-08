@@ -342,6 +342,12 @@ export interface Observable {
   created_at: string
 }
 
+export interface IncidentSuggestion {
+  source_ip: string
+  alert_count: number
+  alerts: Alert[]
+}
+
 export interface WebhookResponse {
   alert_id: string
   title: string
@@ -501,7 +507,7 @@ export const api = {
       postJSON<{ detail: string }>(`/incidents/${id}/alerts`, { alert_id: alertId }),
     unlinkAlert: (id: string, alertId: string) =>
       deleteJSON(`/incidents/${id}/alerts/${alertId}`),
-    suggestions: () => fetchJSON<{ source_ip: string; count: number; alert_ids: string[] }[]>('/incidents/suggestions'),
+    suggestions: () => fetchJSON<IncidentSuggestion[]>('/incidents/suggestions'),
   },
   observables: {
     list: (params?: { type?: string; limit?: number; offset?: number }) => {
