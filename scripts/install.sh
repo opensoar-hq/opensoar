@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: curl -fsSL https://opensoar.app/install.sh | sh
 
 OPENSOAR_DIR="${OPENSOAR_DIR:-opensoar}"
-BASE_URL="https://raw.githubusercontent.com/opensoar-hq/opensoar-core/main/deploy"
+BASE_URL="${BASE_URL:-https://raw.githubusercontent.com/opensoar-hq/opensoar-core/main/deploy}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -56,15 +56,31 @@ else
 fi
 
 # --- Pull images and start ---
-info "Pulling latest images..."
-docker compose pull
+if [ "${OPENSOAR_SKIP_PULL:-0}" = "1" ]; then
+  info "Skipping image pull (OPENSOAR_SKIP_PULL=1)"
+else
+  info "Pulling latest images..."
+  docker compose pull
+fi
 
 info "Starting OpenSOAR..."
 docker compose up -d
 
 # --- Wait for API health ---
 info "Waiting for API to become healthy..."
-API_PORT=$(grep -oP 'API_PORT=\K\d+' .env 2>/dev/null || echo "8000")
+read_env_value() {
+  local key="$1"
+  local default_value="$2"
+  local value
+  value=$(awk -F= -v key="$key" '$1 == key { print $2; exit }' .env 2>/dev/null || true)
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+API_PORT=$(read_env_value "API_PORT" "8000")
 RETRIES=30
 until curl -sf "http://localhost:${API_PORT}/api/v1/health" >/dev/null 2>&1; do
   RETRIES=$((RETRIES - 1))
@@ -79,7 +95,7 @@ if [ "$RETRIES" -gt 0 ]; then
   info "API is healthy!"
 fi
 
-UI_PORT=$(grep -oP 'UI_PORT=\K\d+' .env 2>/dev/null || echo "3000")
+UI_PORT=$(read_env_value "UI_PORT" "3000")
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
