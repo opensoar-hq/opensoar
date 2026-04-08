@@ -247,6 +247,20 @@ test('creates an incident from a correlation suggestion', async ({ page }) => {
   await expect(page.getByText('Northwind suspicious login', { exact: true })).toBeVisible()
 })
 
+test('creates an incident directly from the alert detail page', async ({ page }) => {
+  await mockEnterpriseApi(page)
+  await page.goto('/alerts/alert-2')
+
+  await expect(page.getByRole('heading', { name: 'Northwind second suspicious login' })).toBeVisible()
+  await expect(page.getByText('No incidents linked yet.')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Create' }).click()
+  await expect(page.getByRole('heading', { name: 'Create Incident from Alert' })).toBeVisible()
+  await page.getByRole('button', { name: 'Create Incident' }).click()
+
+  await expect(page.getByText('Created and linked incident Northwind second suspicious login')).toBeVisible()
+})
+
 test('tenant admin only sees enterprise settings tab', async ({ page }) => {
   await mockEnterpriseApi(page, {
     analyst: {

@@ -204,6 +204,7 @@ interface MockEnterpriseState {
   incidentActivities: Record<string, ActivityInfo[]>
   incidentObservables: Record<string, ObservableInfo[]>
   incidentSuggestions: IncidentSuggestionInfo[]
+  alertActivities: Record<string, ActivityInfo[]>
 }
 
 interface MockEnterpriseOptions {
@@ -248,6 +249,7 @@ interface MockEnterpriseOptions {
   incidentActivities?: Record<string, ActivityInfo[]>
   incidentObservables?: Record<string, ObservableInfo[]>
   incidentSuggestions?: IncidentSuggestionInfo[]
+  alertActivities?: Record<string, ActivityInfo[]>
 }
 
 const now = '2026-04-04T00:00:00.000Z'
@@ -274,7 +276,7 @@ const defaultAnalyst: Analyst = {
   created_at: now,
 }
 
-let idCounter = 1
+let idCounter = 100
 
 function nextId(prefix: string): string {
   idCounter += 1
@@ -406,6 +408,11 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
     },
   ]
 
+  const alertActivities = options.alertActivities ?? {
+    'alert-1': [],
+    'alert-2': [],
+  }
+
   return {
     authenticated: options.authenticated ?? true,
     analyst: options.analyst ?? { ...defaultAdmin },
@@ -501,6 +508,7 @@ function cloneState(options: MockEnterpriseOptions): MockEnterpriseState {
     incidentActivities,
     incidentObservables,
     incidentSuggestions,
+    alertActivities,
   }
 }
 
@@ -660,6 +668,140 @@ export async function mockEnterpriseApi(
         recent_runs: [],
       })
       return
+    }
+
+    if (method === 'GET' && pathname === '/api/v1/actions') {
+      await fulfillJson(route, [])
+      return
+    }
+
+    if (pathname.startsWith('/api/v1/alerts/')) {
+      const segments = pathname.split('/')
+      const alertId = segments[segments.indexOf('alerts') + 1] ?? ''
+      const alert = state.alerts.find((item) => item.id === alertId)
+      if (!alert) {
+        await fulfillJson(route, { detail: 'Alert not found' }, 404)
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/alerts/${alertId}`) {
+        await fulfillJson(route, {
+          ...alert,
+          raw_payload: {},
+          normalized: {},
+          resolved_at: null,
+          resolve_reason: null,
+        })
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/alerts/${alertId}/runs`) {
+        await fulfillJson(route, { runs: [], total: 0 })
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/alerts/${alertId}/activities`) {
+        const activities = state.alertActivities[alertId] ?? []
+        await fulfillJson(route, { activities, total: activities.length })
+        return
+      }
+
+      if (method === 'GET' && pathname === `/api/v1/alerts/${alertId}/incidents`) {
+        const incidents = state.incidents.filter((incident) =>
+          (state.incidentAlerts[incident.id] ?? []).some((item) => item.id === alertId),
+        )
+        await fulfillJson(route, incidents)
+        return
+      }
+
+      if (method === 'POST' && pathname === `/api/v1/alerts/${alertId}/incidents`) {
+        const body = requestBody(route)
+        let incident = null as IncidentInfo | null
+        let created = false
+
+        if (typeof body.incident_id === 'string') {
+          incident = state.incidents.find((item) => item.id === body.incident_id) ?? null
+        } else {
+          incident = {
+            id: nextId('incident'),
+            title: String(body.title ?? ''),
+            description: typeof body.description === 'string' ? body.description : null,
+            severity: typeof body.severity === 'string' ? body.severity : 'medium',
+            status: 'open',
+            assigned_to: null,
+            assigned_username: null,
+            tags: Array.isArray(body.tags) ? body.tags.map(String) : null,
+            alert_count: 0,
+            closed_at: null,
+            created_at: now,
+            updated_at: now,
+          }
+          state.incidents.unshift(incident)
+          state.incidentAlerts[incident.id] = []
+          state.incidentActivities[incident.id] = [
+            {
+              id: nextId('incident-activity'),
+              alert_id: null,
+              incident_id: incident.id,
+              analyst_id: state.analyst?.id ?? null,
+              analyst_username: state.analyst?.username ?? null,
+              action: 'incident_created',
+              detail: `Incident created: ${incident.title}`,
+              metadata_json: { incident_title: incident.title },
+              created_at: now,
+              updated_at: now,
+            },
+          ]
+          state.incidentObservables[incident.id] = []
+          created = true
+        }
+
+        if (!incident) {
+          await fulfillJson(route, { detail: 'Incident not found' }, 404)
+          return
+        }
+
+        if (!(state.incidentAlerts[incident.id] ?? []).some((item) => item.id === alertId)) {
+          state.incidentAlerts[incident.id] = [...(state.incidentAlerts[incident.id] ?? []), alert]
+          incident.alert_count = state.incidentAlerts[incident.id].length
+        }
+
+        state.alertActivities[alertId] = [
+          {
+            id: nextId('alert-activity'),
+            alert_id: alertId,
+            incident_id: incident.id,
+            analyst_id: state.analyst?.id ?? null,
+            analyst_username: state.analyst?.username ?? null,
+            action: 'incident_linked',
+            detail: created ? `Created and linked incident ${incident.title}` : `Linked to incident ${incident.title}`,
+            metadata_json: {
+              incident_id: incident.id,
+              incident_title: incident.title,
+              created_new_incident: created,
+            },
+            created_at: now,
+            updated_at: now,
+          },
+          ...(state.alertActivities[alertId] ?? []),
+        ]
+
+        state.incidentActivities[incident.id].unshift({
+          id: nextId('incident-activity'),
+          alert_id: alertId,
+          incident_id: incident.id,
+          analyst_id: state.analyst?.id ?? null,
+          analyst_username: state.analyst?.username ?? null,
+          action: 'alert_linked',
+          detail: `Linked alert ${alert.title}`,
+          metadata_json: { alert_id: alert.id, alert_title: alert.title },
+          created_at: now,
+          updated_at: now,
+        })
+
+        await fulfillJson(route, incident, 201)
+        return
+      }
     }
 
     if (method === 'GET' && pathname === '/api/v1/incidents') {
