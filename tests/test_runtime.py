@@ -5,7 +5,12 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from opensoar import get_current_alert_id, playbook, resolve_current_alert
+from opensoar import (
+    get_current_alert_id,
+    playbook,
+    resolve_current_alert,
+    update_current_alert,
+)
 from opensoar.core.decorators import get_playbook_registry
 from opensoar.core.executor import PlaybookExecutor
 from opensoar.models.activity import Activity
@@ -120,6 +125,61 @@ class TestPlaybookRuntime:
 
         assert result.status == "failed"
         assert "determination must be one of" in (result.error or "")
+
+    async def test_update_current_alert_can_mark_in_progress(self, session):
+        @playbook(trigger="webhook", name="test_update_current_alert")
+        async def update_playbook(alert):
+            return await update_current_alert(
+                status="in_progress",
+                determination="suspicious",
+                reason="Playbook completed triage but needs human follow-up",
+                activity_action="playbook_needs_handoff",
+                activity_detail="Playbook escalated the alert for analyst review",
+            )
+
+        alert = Alert(
+            source="webhook",
+            source_id=f"runtime-{uuid.uuid4().hex[:8]}",
+            title="Runtime Update",
+            description="Test alert",
+            severity="low",
+            status="new",
+            raw_payload={"rule_name": "Runtime Update", "severity": "low"},
+            normalized={"severity": "low", "source": "webhook"},
+        )
+        session.add(alert)
+        await session.flush()
+
+        session.add(
+            PlaybookDefinition(
+                name="test_update_current_alert",
+                description="Runtime update test",
+                module_path=update_playbook.__module__,
+                function_name=update_playbook.__name__,
+                trigger_type="webhook",
+                trigger_config={},
+                enabled=True,
+            )
+        )
+        await session.commit()
+
+        executor = PlaybookExecutor(session)
+        result = await executor.execute(
+            get_playbook_registry()["test_update_current_alert"],
+            alert_id=alert.id,
+        )
+
+        refreshed = (
+            await session.execute(select(Alert).where(Alert.id == alert.id))
+        ).scalar_one()
+        assert result.status == "success"
+        assert refreshed.status == "in_progress"
+        assert refreshed.determination == "suspicious"
+        assert refreshed.resolve_reason == "Playbook completed triage but needs human follow-up"
+
+    async def test_update_current_alert_rejects_resolved_without_determination(self):
+        with pytest.raises(ValueError, match="requires a determination"):
+            await update_current_alert(status="resolved")
 
     async def test_execute_sequence_runs_playbooks_in_order(self, session, db_session_factory):
         execution_log: list[str] = []

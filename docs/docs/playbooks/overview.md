@@ -81,6 +81,22 @@ await resolve_current_alert(
 
 This is the supported path for automation that wants to mark the current alert as resolved after remediation succeeds.
 
+### Updating The Current Alert Without Resolving It
+
+If a playbook finishes its own automation but wants a human to continue, use the generic helper:
+
+```python
+from opensoar import update_current_alert
+
+await update_current_alert(
+    status="in_progress",
+    determination="suspicious",
+    reason="Playbook completed triage but needs analyst follow-up",
+)
+```
+
+Use this when the automation has done useful work but the alert should stay open.
+
 ## Recommended Workflow
 
 1. Write a playbook in `playbooks/` or another configured directory.
