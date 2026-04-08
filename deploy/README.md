@@ -2,6 +2,8 @@
 
 This directory now owns the public self-hosted packaging entry points for OpenSOAR.
 
+**OpenSOAR is a PwnKit Labs product.**
+
 ## Deployment Paths
 
 ### Docker Compose
