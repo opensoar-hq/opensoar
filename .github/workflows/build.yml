@@ -79,7 +79,16 @@ jobs:
           POSTGRES_PASSWORD: opensoar_dev
           JWT_SECRET: test-secret-which-is-long-enough-for-hs256
           API_KEY_SECRET: test-api-key-secret
-        run: docker compose up -d postgres redis
+        run: |
+          for i in $(seq 1 3); do
+            if docker compose up -d postgres redis; then
+              exit 0
+            fi
+            echo "docker compose up -d postgres redis failed on attempt $i; retrying..."
+            sleep 5
+          done
+          echo "docker compose up -d postgres redis failed after 3 attempts"
+          exit 1
 
       - name: Wait for Postgres readiness
         run: |
