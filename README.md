@@ -4,6 +4,7 @@
 
 <h1 align="center">OpenSOAR</h1>
 <p align="center"><strong>Open-source SOAR platform. Write security automation in Python, not YAML.</strong></p>
+<p align="center"><strong>A PwnKit Labs product.</strong></p>
 
 <p align="center">
   <a href="https://github.com/opensoar-hq/opensoar-core/actions/workflows/build.yml"><img src="https://github.com/opensoar-hq/opensoar-core/actions/workflows/build.yml/badge.svg" alt="CI"></a>
