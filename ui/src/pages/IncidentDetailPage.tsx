@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History } from 'lucide-react'
-import { api, type Alert, type Activity } from '@/api'
+import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History, UserCheck, Users } from 'lucide-react'
+import { api, type Alert, type Activity, type Analyst } from '@/api'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
@@ -171,6 +171,7 @@ export function IncidentDetailPage() {
   const { analyst } = useAuth()
   const toast = useToast()
   const [showLinkDialog, setShowLinkDialog] = useState(false)
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
   const [linkAlertId, setLinkAlertId] = useState('')
   const [commentText, setCommentText] = useState('')
 
@@ -192,6 +193,11 @@ export function IncidentDetailPage() {
     enabled: !!id,
   })
 
+  const { data: analysts } = useQuery({
+    queryKey: ['analysts'],
+    queryFn: api.analysts.list,
+  })
+
   const invalidateIncident = () => {
     queryClient.invalidateQueries({ queryKey: ['incident', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-alerts', id] })
@@ -201,9 +207,14 @@ export function IncidentDetailPage() {
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => api.incidents.update(id!, data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       invalidateIncident()
-      toast.success('Incident updated')
+      if (Object.prototype.hasOwnProperty.call(variables, 'assigned_to')) {
+        setShowAssignDialog(false)
+        toast.success('Incident assignment updated')
+      } else {
+        toast.success('Incident updated')
+      }
     },
     onError: () => toast.error('Failed to update incident'),
   })
@@ -250,6 +261,9 @@ export function IncidentDetailPage() {
   if (!incident) return <div className="text-center py-20 text-muted">Incident not found</div>
 
   const isClosed = incident.status === 'closed'
+  const isUnassigned = !incident.assigned_to
+  const isAssignedToMe = analyst && incident.assigned_to === analyst.id
+  const otherAnalysts = (analysts || []).filter((a: Analyst) => a.is_active && a.id !== incident.assigned_to)
 
   return (
     <PageTransition>
@@ -267,6 +281,20 @@ export function IncidentDetailPage() {
                   {incident.title}
                 </h1>
                 <div className="flex items-center gap-1.5 shrink-0">
+                  {!isClosed && (
+                    <>
+                      {analyst && isUnassigned && (
+                        <Button variant="primary" size="sm" onClick={() => updateMutation.mutate({ assigned_to: analyst.id })} disabled={updateMutation.isPending}>
+                          <UserCheck size={13} /> Assign to me
+                        </Button>
+                      )}
+                      {analyst && !isUnassigned && (
+                        <Button variant="ghost" size="sm" onClick={() => setShowAssignDialog(true)} disabled={updateMutation.isPending}>
+                          <Users size={13} /> {isAssignedToMe ? 'Reassign' : 'Assign'}
+                        </Button>
+                      )}
+                    </>
+                  )}
                   {isClosed ? (
                     <Button
                       size="sm"
@@ -497,6 +525,41 @@ export function IncidentDetailPage() {
               {linkMutation.isPending ? 'Linking...' : 'Link Alert'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAssignDialog} onClose={() => setShowAssignDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowAssignDialog(false)}>
+            <DialogTitle>Assign Incident</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            {otherAnalysts.length === 0 ? (
+              <div className="text-sm text-muted py-4 text-center">No other active analysts available</div>
+            ) : (
+              <div className="space-y-1">
+                {otherAnalysts.map((person: Analyst) => (
+                  <button
+                    key={person.id}
+                    onClick={() => updateMutation.mutate({ assigned_to: person.id })}
+                    disabled={updateMutation.isPending}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left',
+                      'bg-transparent border-none hover:bg-surface-hover cursor-pointer transition-colors',
+                    )}
+                  >
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-accent/15 text-accent shrink-0">
+                      <UserCheck size={13} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-heading font-medium">{person.display_name}</div>
+                      <div className="text-[11px] text-muted">@{person.username} {person.role === 'admin' && '· admin'}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </PageTransition>
