@@ -9,7 +9,8 @@ from pydantic import BaseModel
 
 class ActivityResponse(BaseModel):
     id: uuid.UUID
-    alert_id: uuid.UUID
+    alert_id: uuid.UUID | None = None
+    incident_id: uuid.UUID | None = None
     analyst_id: uuid.UUID | None = None
     analyst_username: str | None = None
     action: str

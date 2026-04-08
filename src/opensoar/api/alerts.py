@@ -278,10 +278,23 @@ async def create_or_link_incident_for_alert(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Alert already linked to this incident")
 
+    if created_new_incident:
+        session.add(
+            Activity(
+                incident_id=incident.id,
+                analyst_id=analyst.id,
+                analyst_username=analyst.username,
+                action="incident_created",
+                detail=f"Incident created: {incident.title}",
+                metadata_json={"incident_title": incident.title},
+            )
+        )
+
     session.add(IncidentAlert(incident_id=incident.id, alert_id=alert_id))
     session.add(
         Activity(
             alert_id=alert_id,
+            incident_id=incident.id,
             analyst_id=analyst.id,
             analyst_username=analyst.username,
             action="incident_linked",

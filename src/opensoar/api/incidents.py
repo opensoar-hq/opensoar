@@ -11,10 +11,12 @@ from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
 from opensoar.auth.rbac import Permission, require_permission
 from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
+from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
+from opensoar.schemas.activity import ActivityList, ActivityResponse, CommentCreate, CommentUpdate
 from opensoar.schemas.alert import AlertResponse
 from opensoar.schemas.incident import (
     IncidentCreate,
@@ -38,6 +40,47 @@ async def _incident_response(
     resp = IncidentResponse.model_validate(incident)
     resp.alert_count = alert_count
     return resp
+
+
+def _incident_activity_detail(action: str, incident_title: str, alert_title: str | None = None) -> str:
+    if action == "incident_created":
+        return f"Incident created: {incident_title}"
+    if action == "status_change":
+        return incident_title
+    if action == "severity_change":
+        return incident_title
+    if action == "assigned":
+        return incident_title
+    if action == "comment":
+        return incident_title
+    if action == "alert_linked" and alert_title:
+        return f"Linked alert {alert_title}"
+    if action == "alert_unlinked" and alert_title:
+        return f"Unlinked alert {alert_title}"
+    return incident_title
+
+
+def _append_incident_activity(
+    session: AsyncSession,
+    *,
+    incident_id: uuid.UUID,
+    analyst: Analyst | None,
+    action: str,
+    detail: str,
+    metadata_json: dict | None = None,
+    alert_id: uuid.UUID | None = None,
+) -> None:
+    session.add(
+        Activity(
+            alert_id=alert_id,
+            incident_id=incident_id,
+            analyst_id=analyst.id if analyst else None,
+            analyst_username=analyst.username if analyst else None,
+            action=action,
+            detail=detail,
+            metadata_json=metadata_json,
+        )
+    )
 
 
 @router.get("/suggestions")
@@ -157,6 +200,15 @@ async def create_incident(
         tags=data.tags,
     )
     session.add(incident)
+    await session.flush()
+    _append_incident_activity(
+        session,
+        incident_id=incident.id,
+        analyst=analyst,
+        action="incident_created",
+        detail=_incident_activity_detail("incident_created", incident.title),
+        metadata_json={"incident_title": incident.title},
+    )
     await session.commit()
     await session.refresh(incident)
     return await _incident_response(session, incident)
@@ -212,6 +264,10 @@ async def update_incident(
     )
 
     update_data = update.model_dump(exclude_unset=True)
+    old_status = incident.status
+    old_severity = incident.severity
+    old_assigned_to = incident.assigned_to
+    old_assigned_username = incident.assigned_username
 
     # Handle assignment
     if "assigned_to" in update_data:
@@ -235,6 +291,54 @@ async def update_incident(
     # Set closed_at when status changes to closed
     if update.status == "closed" and not incident.closed_at:
         incident.closed_at = datetime.now(timezone.utc)
+    elif update.status and update.status != "closed":
+        incident.closed_at = None
+
+    if update.status and update.status != old_status:
+        _append_incident_activity(
+            session,
+            incident_id=incident.id,
+            analyst=analyst,
+            action="status_change",
+            detail=f"Status changed from {old_status} to {update.status}",
+            metadata_json={"old": old_status, "new": update.status},
+        )
+
+    if update.severity and update.severity != old_severity:
+        _append_incident_activity(
+            session,
+            incident_id=incident.id,
+            analyst=analyst,
+            action="severity_change",
+            detail=f"Severity changed from {old_severity} to {update.severity}",
+            metadata_json={"old": old_severity, "new": update.severity},
+        )
+
+    if "assigned_to" in update_data or update.assigned_to is not None or (
+        update.assigned_to is None and old_assigned_to is not None and "assigned_to" in update.model_fields_set
+    ):
+        if incident.assigned_to != old_assigned_to:
+            if incident.assigned_to and incident.assigned_username:
+                detail = f"Assigned to {incident.assigned_username}"
+            else:
+                detail = (
+                    f"Unassigned from {old_assigned_username}"
+                    if old_assigned_username
+                    else "Unassigned"
+                )
+            _append_incident_activity(
+                session,
+                incident_id=incident.id,
+                analyst=analyst,
+                action="assigned",
+                detail=detail,
+                metadata_json={
+                    "old": str(old_assigned_to) if old_assigned_to else None,
+                    "new": str(incident.assigned_to) if incident.assigned_to else None,
+                    "old_username": old_assigned_username,
+                    "new_username": incident.assigned_username,
+                },
+            )
 
     await session.commit()
     await session.refresh(incident)
@@ -294,6 +398,15 @@ async def link_alert(
 
     link = IncidentAlert(incident_id=incident_id, alert_id=alert_uuid)
     session.add(link)
+    _append_incident_activity(
+        session,
+        incident_id=incident_id,
+        alert_id=alert_uuid,
+        analyst=analyst,
+        action="alert_linked",
+        detail=f"Linked alert {alert.title}",
+        metadata_json={"alert_id": str(alert.id), "alert_title": alert.title},
+    )
     await session.commit()
     return {"detail": "Alert linked to incident"}
 
@@ -369,6 +482,155 @@ async def unlink_alert(
         session=session,
     )
 
+    alert = (
+        await session.execute(select(Alert).where(Alert.id == alert_id))
+    ).scalar_one_or_none()
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+
+    if incident and alert:
+        _append_incident_activity(
+            session,
+            incident_id=incident_id,
+            alert_id=alert_id,
+            analyst=analyst,
+            action="alert_unlinked",
+            detail=f"Unlinked alert {alert.title}",
+            metadata_json={"alert_id": str(alert.id), "alert_title": alert.title},
+        )
     await session.delete(link)
     await session.commit()
     return {"detail": "Alert unlinked from incident"}
+
+
+@router.get("/{incident_id}/activities", response_model=ActivityList)
+async def list_incident_activities(
+    incident_id: uuid.UUID,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    query = (
+        select(Activity)
+        .where(Activity.incident_id == incident_id)
+        .order_by(Activity.created_at.desc())
+    )
+    count_query = select(func.count(Activity.id)).where(Activity.incident_id == incident_id)
+
+    total = (await session.execute(count_query)).scalar() or 0
+    result = await session.execute(query.offset(offset).limit(limit))
+    activities = result.scalars().all()
+
+    return ActivityList(
+        activities=[ActivityResponse.model_validate(a) for a in activities],
+        total=total,
+    )
+
+
+@router.post("/{incident_id}/comments", response_model=ActivityResponse)
+async def add_incident_comment(
+    incident_id: uuid.UUID,
+    body: CommentCreate,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
+):
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    activity = Activity(
+        incident_id=incident_id,
+        analyst_id=analyst.id,
+        analyst_username=analyst.username,
+        action="comment",
+        detail=body.text,
+    )
+    session.add(activity)
+    await session.commit()
+    await session.refresh(activity)
+    return ActivityResponse.model_validate(activity)
+
+
+@router.patch("/{incident_id}/comments/{comment_id}", response_model=ActivityResponse)
+async def edit_incident_comment(
+    incident_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    body: CommentUpdate,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
+):
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    activity = (
+        await session.execute(
+            select(Activity).where(
+                Activity.id == comment_id,
+                Activity.incident_id == incident_id,
+                Activity.action == "comment",
+            )
+        )
+    ).scalar_one_or_none()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Comment not found")
+
+    if activity.analyst_id != analyst.id:
+        raise HTTPException(status_code=403, detail="Can only edit your own comments")
+
+    history = (activity.metadata_json or {}).get("edit_history", [])
+    history.append({
+        "text": activity.detail,
+        "edited_at": activity.updated_at.isoformat(),
+    })
+    activity.metadata_json = {**(activity.metadata_json or {}), "edit_history": history}
+    activity.detail = body.text
+
+    await session.commit()
+    await session.refresh(activity)
+    return ActivityResponse.model_validate(activity)

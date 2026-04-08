@@ -241,3 +241,100 @@ class TestIncidentFiltering:
 
         assert detail.status_code == 403
         assert update.status_code == 403
+
+
+class TestIncidentActivities:
+    async def test_incident_create_adds_activity(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Activity Create", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        activities = await client.get(
+            f"/api/v1/incidents/{incident_id}/activities",
+            headers=registered_analyst["headers"],
+        )
+        assert activities.status_code == 200
+        data = activities.json()
+        assert data["total"] >= 1
+        assert data["activities"][0]["action"] == "incident_created"
+
+    async def test_incident_status_change_adds_activity(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Activity Status", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        update = await client.patch(
+            f"/api/v1/incidents/{incident_id}",
+            json={"status": "investigating"},
+            headers=registered_analyst["headers"],
+        )
+        assert update.status_code == 200
+
+        activities = await client.get(
+            f"/api/v1/incidents/{incident_id}/activities",
+            headers=registered_analyst["headers"],
+        )
+        assert any(activity["action"] == "status_change" for activity in activities.json()["activities"])
+
+    async def test_incident_comment_round_trip(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Activity Comment", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        comment = await client.post(
+            f"/api/v1/incidents/{incident_id}/comments",
+            json={"text": "Need handoff after IOC review"},
+            headers=registered_analyst["headers"],
+        )
+        assert comment.status_code == 200
+        comment_id = comment.json()["id"]
+        assert comment.json()["action"] == "comment"
+        assert comment.json()["detail"] == "Need handoff after IOC review"
+
+        edited = await client.patch(
+            f"/api/v1/incidents/{incident_id}/comments/{comment_id}",
+            json={"text": "Need handoff after IOC review and containment"},
+            headers=registered_analyst["headers"],
+        )
+        assert edited.status_code == 200
+        assert edited.json()["detail"] == "Need handoff after IOC review and containment"
+        assert len(edited.json()["metadata_json"]["edit_history"]) == 1
+
+    async def test_incident_link_and_unlink_add_activity(self, client, registered_analyst, sample_alert_via_api):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Activity Link", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+        alert_id = sample_alert_via_api["alert_id"]
+
+        link = await client.post(
+            f"/api/v1/incidents/{incident_id}/alerts",
+            json={"alert_id": str(alert_id)},
+            headers=registered_analyst["headers"],
+        )
+        assert link.status_code in (200, 201)
+
+        unlink = await client.delete(
+            f"/api/v1/incidents/{incident_id}/alerts/{alert_id}",
+            headers=registered_analyst["headers"],
+        )
+        assert unlink.status_code == 200
+
+        activities = await client.get(
+            f"/api/v1/incidents/{incident_id}/activities",
+            headers=registered_analyst["headers"],
+        )
+        actions = [activity["action"] for activity in activities.json()["activities"]]
+        assert "alert_linked" in actions
+        assert "alert_unlinked" in actions

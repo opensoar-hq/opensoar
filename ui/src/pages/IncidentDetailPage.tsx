@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Clock, Link2, Unlink, Shield } from 'lucide-react'
-import { api, type Alert } from '@/api'
+import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History } from 'lucide-react'
+import { api, type Alert, type Activity } from '@/api'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
@@ -14,15 +14,165 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { PageTransition, StaggerParent, StaggerChild } from '@/components/ui/PageTransition'
+import { useAuth } from '@/contexts/AuthContext'
+import { cn } from '@/lib/utils'
 import { timeAgo, formatDate } from '@/lib/utils'
+
+const ACTION_LABELS: Record<string, string> = {
+  incident_created: 'Incident Created',
+  incident_linked: 'Incident Linked',
+  status_change: 'Status Changed',
+  severity_change: 'Severity Changed',
+  assigned: 'Assignment Updated',
+  alert_linked: 'Alert Linked',
+  alert_unlinked: 'Alert Unlinked',
+  comment: 'Comment',
+}
+
+const ACTION_COLORS: Record<string, string> = {
+  incident_created: 'var(--color-success)',
+  incident_linked: 'var(--color-info)',
+  status_change: 'var(--color-info)',
+  severity_change: 'var(--color-warning)',
+  assigned: 'var(--color-info)',
+  alert_linked: 'var(--color-info)',
+  alert_unlinked: 'var(--color-danger)',
+  comment: 'var(--color-text)',
+}
+
+function IncidentTimelineEntry({
+  activity, incidentId, isOwnComment,
+}: {
+  activity: Activity
+  incidentId: string
+  isOwnComment: boolean
+}) {
+  const queryClient = useQueryClient()
+  const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(activity.detail || '')
+  const [showHistory, setShowHistory] = useState(false)
+
+  const editMutation = useMutation({
+    mutationFn: (text: string) => api.incidents.editComment(incidentId, activity.id, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['incident-activities', incidentId] })
+      setEditing(false)
+      toast.success('Comment updated')
+    },
+    onError: () => toast.error('Failed to edit comment'),
+  })
+
+  const isComment = activity.action === 'comment'
+  const isEdited = activity.created_at !== activity.updated_at
+  const editHistory = (activity.metadata_json?.edit_history as Array<{ text: string; edited_at: string }>) || []
+
+  return (
+    <div className="relative pl-6 pb-4 last:pb-0">
+      <div
+        className={cn(
+          'absolute left-0 top-1.5 w-[15px] h-[15px] rounded-full border-2 flex items-center justify-center',
+          isComment ? 'border-accent/40 bg-accent/10' : 'border-border bg-surface',
+        )}
+      >
+        {isComment ? (
+          <MessageSquare size={7} className="text-accent" />
+        ) : (
+          <div
+            className="w-[7px] h-[7px] rounded-full"
+            style={{ backgroundColor: ACTION_COLORS[activity.action] || 'var(--color-muted)' }}
+          />
+        )}
+      </div>
+      <div className="text-xs">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className={cn('font-medium', isComment ? 'text-accent' : 'text-heading')}>
+            {isComment ? (activity.analyst_username || 'System') : (ACTION_LABELS[activity.action] || activity.action)}
+          </span>
+          <Tooltip content={formatDate(activity.created_at)}>
+            <span className="text-muted">{timeAgo(activity.created_at)}</span>
+          </Tooltip>
+          {isComment && isEdited && (
+            <Tooltip content={`Edited ${formatDate(activity.updated_at)}`}>
+              <span className="text-muted/60 text-[10px] italic">edited</span>
+            </Tooltip>
+          )}
+        </div>
+
+        {isComment && editing ? (
+          <div className="mt-1 space-y-1.5">
+            <Input
+              type="text"
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && editText.trim()) editMutation.mutate(editText.trim())
+                if (e.key === 'Escape') setEditing(false)
+              }}
+              className="!text-xs"
+              autoFocus
+            />
+            <div className="flex gap-1">
+              <Button size="sm" variant="primary" onClick={() => editText.trim() && editMutation.mutate(editText.trim())} disabled={editMutation.isPending}>
+                Save
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : isComment && activity.detail ? (
+          <div className="group/comment bg-surface-hover/50 px-3 py-2 rounded-md mt-1 relative">
+            <div className="text-text">{activity.detail}</div>
+            {isOwnComment && (
+              <button
+                onClick={() => { setEditText(activity.detail || ''); setEditing(true) }}
+                className="absolute top-1.5 right-1.5 p-1 rounded bg-transparent border-none cursor-pointer text-muted hover:text-accent opacity-0 group-hover/comment:opacity-100 transition-opacity"
+                title="Edit comment"
+              >
+                <Pencil size={10} />
+              </button>
+            )}
+            {editHistory.length > 0 && (
+              <button
+                onClick={() => setShowHistory(!showHistory)}
+                className="flex items-center gap-1 mt-1.5 text-[10px] text-muted hover:text-accent bg-transparent border-none cursor-pointer p-0 transition-colors"
+              >
+                <History size={9} /> {editHistory.length} edit{editHistory.length > 1 ? 's' : ''}
+              </button>
+            )}
+            {showHistory && editHistory.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border space-y-1.5">
+                {editHistory.map((entry, i) => (
+                  <div key={i} className="text-[10px]">
+                    <span className="text-muted">{timeAgo(entry.edited_at)}</span>
+                    <div className="text-muted/70 line-through">{entry.text}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activity.detail ? (
+          <div className="text-text">{activity.detail}</div>
+        ) : null}
+
+        {!isComment && activity.analyst_username && (
+          <div className="text-muted text-[11px] mt-0.5">by {activity.analyst_username}</div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function IncidentDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { analyst } = useAuth()
   const toast = useToast()
   const [showLinkDialog, setShowLinkDialog] = useState(false)
   const [linkAlertId, setLinkAlertId] = useState('')
+  const [commentText, setCommentText] = useState('')
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ['incident', id],
@@ -36,9 +186,16 @@ export function IncidentDetailPage() {
     enabled: !!id,
   })
 
+  const { data: activities } = useQuery({
+    queryKey: ['incident-activities', id],
+    queryFn: () => api.incidents.activities(id!),
+    enabled: !!id,
+  })
+
   const invalidateIncident = () => {
     queryClient.invalidateQueries({ queryKey: ['incident', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-alerts', id] })
+    queryClient.invalidateQueries({ queryKey: ['incident-activities', id] })
     queryClient.invalidateQueries({ queryKey: ['incidents'] })
   }
 
@@ -69,6 +226,16 @@ export function IncidentDetailPage() {
       toast.success('Alert unlinked')
     },
     onError: () => toast.error('Failed to unlink alert'),
+  })
+
+  const commentMutation = useMutation({
+    mutationFn: (text: string) => api.incidents.addComment(id!, text),
+    onSuccess: () => {
+      setCommentText('')
+      queryClient.invalidateQueries({ queryKey: ['incident-activities', id] })
+      toast.success('Comment added')
+    },
+    onError: () => toast.error('Failed to add comment'),
   })
 
   if (isLoading) {
@@ -215,6 +382,57 @@ export function IncidentDetailPage() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </StaggerChild>
+
+        <StaggerChild>
+          <Card>
+            <CardHeader>
+              <CardTitle>Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2 mb-4">
+                <Input
+                  type="text"
+                  placeholder="Add a comment..."
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && commentText.trim()) commentMutation.mutate(commentText.trim())
+                  }}
+                  className="flex-1 text-sm"
+                />
+                <Button
+                  size="sm"
+                  disabled={!commentText.trim() || commentMutation.isPending}
+                  onClick={() => commentMutation.mutate(commentText.trim())}
+                >
+                  <MessageSquare size={13} /> Comment
+                </Button>
+              </div>
+
+              {(!activities || activities.total === 0) ? (
+                <div className="text-center py-6">
+                  <div className="text-xs text-muted">No activity yet. Comments and incident lifecycle events will appear here.</div>
+                </div>
+              ) : (
+                <div className="relative">
+                  {activities.activities.length > 1 && (
+                    <div className="absolute left-[7px] top-4 bottom-4 w-px border-l-2 border-dashed border-border/40" />
+                  )}
+                  <div className="space-y-0">
+                    {activities.activities.map((activity) => (
+                      <IncidentTimelineEntry
+                        key={activity.id}
+                        activity={activity}
+                        incidentId={id!}
+                        isOwnComment={activity.action === 'comment' && analyst?.id === activity.analyst_id}
+                      />
+                    ))}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>

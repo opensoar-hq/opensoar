@@ -193,7 +193,8 @@ export interface AuthCapabilities {
 
 export interface Activity {
   id: string
-  alert_id: string
+  alert_id: string | null
+  incident_id: string | null
   analyst_id: string | null
   analyst_username: string | null
   action: string
@@ -488,6 +489,11 @@ export const api = {
     update: (id: string, data: Record<string, unknown>) =>
       patchJSON<Incident2>(`/incidents/${id}`, data),
     alerts: (id: string) => fetchJSON<Alert[]>(`/incidents/${id}/alerts`),
+    activities: (id: string) => fetchJSON<ActivityList>(`/incidents/${id}/activities`),
+    addComment: (id: string, text: string) =>
+      postJSON<Activity>(`/incidents/${id}/comments`, { text }),
+    editComment: (id: string, commentId: string, text: string) =>
+      patchJSON<Activity>(`/incidents/${id}/comments/${commentId}`, { text }),
     linkAlert: (id: string, alertId: string) =>
       postJSON<{ detail: string }>(`/incidents/${id}/alerts`, { alert_id: alertId }),
     unlinkAlert: (id: string, alertId: string) =>

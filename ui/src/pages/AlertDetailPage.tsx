@@ -53,6 +53,8 @@ const ACTION_LABELS: Record<string, string> = {
   comment: 'Comment',
   playbook_triggered: 'Playbook Triggered',
   incident_linked: 'Incident Linked',
+  alert_linked: 'Incident Linked',
+  alert_unlinked: 'Incident Unlinked',
   ioc_enriched: 'IOC Enriched',
   resolved: 'Resolved',
 }
@@ -67,6 +69,8 @@ const ACTION_COLORS: Record<string, string> = {
   comment: 'var(--color-text)',
   playbook_triggered: 'var(--color-info)',
   incident_linked: 'var(--color-info)',
+  alert_linked: 'var(--color-info)',
+  alert_unlinked: 'var(--color-danger)',
   resolved: 'var(--color-muted)',
 }
 

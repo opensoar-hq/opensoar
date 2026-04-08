@@ -10,12 +10,15 @@ from opensoar.db import Base
 
 
 class Activity(Base):
-    """Audit trail entry for any action taken on an alert."""
+    """Audit trail entry for alert and incident activity streams."""
 
     __tablename__ = "activities"
 
-    alert_id: Mapped[uuid.UUID] = mapped_column(
+    alert_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("alerts.id", ondelete="CASCADE"), index=True
+    )
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("incidents.id", ondelete="CASCADE"), index=True
     )
     analyst_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("analysts.id", ondelete="SET NULL")
