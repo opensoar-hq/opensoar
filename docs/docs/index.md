@@ -12,6 +12,7 @@ This is the canonical documentation site for OpenSOAR.
 
 - [Getting Started](getting-started.md)
 - [Alert Lifecycle](alerts/lifecycle.md)
+- [Incident Workflow](incidents/overview.md)
 - [Playbooks](playbooks/overview.md)
 - [Loading and Syncing Playbooks](playbooks/loading-and-sync.md)
 - [Deployment](deployment/docker.md)

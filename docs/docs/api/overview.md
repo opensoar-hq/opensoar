@@ -36,6 +36,23 @@ In other words:
 
 For the operational loading model, read [Loading and Syncing Playbooks](../playbooks/loading-and-sync.md).
 
+## Relevant Incident Endpoints
+
+Examples:
+
+- `GET /api/v1/incidents`
+- `POST /api/v1/incidents`
+- `PATCH /api/v1/incidents/{incident_id}`
+- `GET /api/v1/incidents/{incident_id}/activities`
+- `POST /api/v1/incidents/{incident_id}/comments`
+- `GET /api/v1/incidents/{incident_id}/alerts`
+- `POST /api/v1/incidents/{incident_id}/alerts`
+- `GET /api/v1/incidents/{incident_id}/observables`
+- `POST /api/v1/incidents/{incident_id}/observables`
+- `GET /api/v1/incidents/suggestions`
+
+For the operator workflow around those endpoints, read [Incident Workflow](../incidents/overview.md).
+
 ## Webhook Ingestion
 
 OpenSOAR can ingest alerts through webhook endpoints under `/api/v1/webhooks/...`, then normalize and route them into playbook execution.
