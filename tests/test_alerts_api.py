@@ -131,6 +131,108 @@ class TestGetAlert:
         assert blocked.status_code == 403
 
 
+class TestAlertIncidents:
+    async def test_list_linked_incidents_for_alert(
+        self, client, sample_alert_via_api, registered_analyst
+    ):
+        alert_id = sample_alert_via_api["alert_id"]
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Linked Incident", "severity": "high"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        link = await client.post(
+            f"/api/v1/incidents/{incident_id}/alerts",
+            json={"alert_id": str(alert_id)},
+            headers=registered_analyst["headers"],
+        )
+        assert link.status_code in (200, 201)
+
+        resp = await client.get(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            headers=registered_analyst["headers"],
+        )
+        assert resp.status_code == 200
+        incidents = resp.json()
+        assert len(incidents) == 1
+        assert incidents[0]["id"] == incident_id
+        assert incidents[0]["title"] == "Linked Incident"
+
+    async def test_create_incident_from_alert(
+        self, client, sample_alert_via_api, registered_analyst
+    ):
+        alert_id = sample_alert_via_api["alert_id"]
+
+        resp = await client.post(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            json={
+                "title": "Escalated From Alert",
+                "severity": "critical",
+                "description": "Created from alert detail workflow",
+            },
+            headers=registered_analyst["headers"],
+        )
+        assert resp.status_code == 201
+        incident = resp.json()
+        assert incident["title"] == "Escalated From Alert"
+        assert incident["severity"] == "critical"
+        assert incident["alert_count"] == 1
+
+        linked = await client.get(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            headers=registered_analyst["headers"],
+        )
+        assert linked.status_code == 200
+        assert linked.json()[0]["id"] == incident["id"]
+
+    async def test_link_existing_incident_from_alert(
+        self, client, sample_alert_via_api, registered_analyst
+    ):
+        alert_id = sample_alert_via_api["alert_id"]
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Existing Incident", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        resp = await client.post(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            json={"incident_id": incident_id},
+            headers=registered_analyst["headers"],
+        )
+        assert resp.status_code == 201
+        assert resp.json()["id"] == incident_id
+        assert resp.json()["alert_count"] == 1
+
+    async def test_cannot_link_same_incident_twice(
+        self, client, sample_alert_via_api, registered_analyst
+    ):
+        alert_id = sample_alert_via_api["alert_id"]
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Duplicate Link Incident", "severity": "medium"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        first = await client.post(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            json={"incident_id": incident_id},
+            headers=registered_analyst["headers"],
+        )
+        assert first.status_code == 201
+
+        second = await client.post(
+            f"/api/v1/alerts/{alert_id}/incidents",
+            json={"incident_id": incident_id},
+            headers=registered_analyst["headers"],
+        )
+        assert second.status_code == 409
+
+
 class TestUpdateAlert:
     async def test_update_severity(self, client, sample_alert_via_api, registered_analyst):
         alert_id = sample_alert_via_api["alert_id"]

@@ -5,16 +5,16 @@ import { motion } from 'framer-motion'
 import {
   ArrowLeft, Clock, Globe, FileJson,
   Play, CheckCircle, XCircle, ChevronRight,
-  UserCheck, Search, Loader, Users,
+  UserCheck, Search, Loader, Users, Briefcase, Link2,
   MessageSquare, Copy, Tag, Pencil, History,
 } from 'lucide-react'
-import { api, type Analyst, type Playbook, type AvailableAction, type ActionExecuteResponse, type PlaybookRun, type Activity } from '@/api'
+import { api, type Analyst, type Playbook, type AvailableAction, type ActionExecuteResponse, type PlaybookRun, type Activity, type Incident2 } from '@/api'
 import { SeverityBadge, StatusBadge, DeterminationBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { JsonViewer } from '@/components/ui/JsonViewer'
 import { Drawer } from '@/components/ui/Drawer'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
-import { Input } from '@/components/ui/Input'
+import { Input, Label, Textarea } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Dropdown, DropdownItem, DropdownSeparator } from '@/components/ui/Dropdown'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
@@ -52,6 +52,7 @@ const ACTION_LABELS: Record<string, string> = {
   manual_action: 'Action Executed',
   comment: 'Comment',
   playbook_triggered: 'Playbook Triggered',
+  incident_linked: 'Incident Linked',
   ioc_enriched: 'IOC Enriched',
   resolved: 'Resolved',
 }
@@ -65,6 +66,7 @@ const ACTION_COLORS: Record<string, string> = {
   manual_action: 'var(--color-info)',
   comment: 'var(--color-text)',
   playbook_triggered: 'var(--color-info)',
+  incident_linked: 'var(--color-info)',
   resolved: 'var(--color-muted)',
 }
 
@@ -402,6 +404,14 @@ export function AlertDetailPage() {
   const [resolvePartner, setResolvePartner] = useState('')
   const [showResolveDialog, setShowResolveDialog] = useState(false)
   const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [showCreateIncidentDialog, setShowCreateIncidentDialog] = useState(false)
+  const [showLinkIncidentDialog, setShowLinkIncidentDialog] = useState(false)
+  const [incidentSearch, setIncidentSearch] = useState('')
+  const [incidentForm, setIncidentForm] = useState({
+    title: '',
+    severity: 'high',
+    description: '',
+  })
   const [commentText, setCommentText] = useState('')
   const [triggerPlaybookId, setTriggerPlaybookId] = useState('')
 
@@ -414,6 +424,12 @@ export function AlertDetailPage() {
   const { data: alertRuns } = useQuery({
     queryKey: ['alert-runs', id],
     queryFn: () => api.alerts.getRuns(id!),
+    enabled: !!id,
+  })
+
+  const { data: linkedIncidents } = useQuery({
+    queryKey: ['alert-incidents', id],
+    queryFn: () => api.alerts.getIncidents(id!),
     enabled: !!id,
   })
 
@@ -438,10 +454,18 @@ export function AlertDetailPage() {
     queryFn: api.analysts.list,
   })
 
+  const { data: incidentOptions } = useQuery({
+    queryKey: ['incidents', 'link-options'],
+    queryFn: () => api.incidents.list({ limit: 100 }),
+    enabled: showLinkIncidentDialog,
+  })
+
   const invalidateAlert = () => {
     queryClient.invalidateQueries({ queryKey: ['alert', id] })
     queryClient.invalidateQueries({ queryKey: ['alerts'] })
     queryClient.invalidateQueries({ queryKey: ['alert-activities', id] })
+    queryClient.invalidateQueries({ queryKey: ['alert-incidents', id] })
+    queryClient.invalidateQueries({ queryKey: ['incidents'] })
   }
 
   const updateMutation = useMutation({
@@ -498,6 +522,32 @@ export function AlertDetailPage() {
     onError: () => toast.error('Failed to trigger playbook'),
   })
 
+  const createIncidentMutation = useMutation({
+    mutationFn: () => api.alerts.attachIncident(id!, {
+      title: incidentForm.title.trim(),
+      severity: incidentForm.severity,
+      description: incidentForm.description.trim() || undefined,
+    }),
+    onSuccess: (incident) => {
+      invalidateAlert()
+      setShowCreateIncidentDialog(false)
+      setIncidentForm({ title: '', severity: 'high', description: '' })
+      toast.success(`Created incident ${incident.title}`)
+    },
+    onError: () => toast.error('Failed to create incident'),
+  })
+
+  const linkIncidentMutation = useMutation({
+    mutationFn: (incidentId: string) => api.alerts.attachIncident(id!, { incident_id: incidentId }),
+    onSuccess: (incident) => {
+      invalidateAlert()
+      setShowLinkIncidentDialog(false)
+      setIncidentSearch('')
+      toast.success(`Linked to ${incident.title}`)
+    },
+    onError: () => toast.error('Failed to link incident'),
+  })
+
   if (isLoading) {
     return (
       <div className="space-y-4 max-w-4xl">
@@ -519,6 +569,30 @@ export function AlertDetailPage() {
   const hasIOCs = alert.iocs && Object.keys(alert.iocs).length > 0
   const enabledPlaybooks = playbooks?.filter((p) => p.enabled) || []
   const otherAnalysts = (analysts || []).filter((a: Analyst) => a.is_active && a.id !== alert.assigned_to)
+  const linkedIncidentIds = new Set((linkedIncidents || []).map((incident) => incident.id))
+  const availableIncidents = (incidentOptions?.incidents || []).filter((incident) => {
+    if (linkedIncidentIds.has(incident.id)) {
+      return false
+    }
+    if (!incidentSearch.trim()) {
+      return true
+    }
+    const term = incidentSearch.trim().toLowerCase()
+    return (
+      incident.title.toLowerCase().includes(term)
+      || incident.id.toLowerCase().includes(term)
+      || (incident.assigned_username || '').toLowerCase().includes(term)
+    )
+  })
+
+  const openCreateIncidentDialog = () => {
+    setIncidentForm({
+      title: alert.title,
+      severity: alert.severity,
+      description: alert.description || '',
+    })
+    setShowCreateIncidentDialog(true)
+  }
 
   return (
     <PageTransition>
@@ -832,6 +906,48 @@ export function AlertDetailPage() {
 
         {/* ===== Right: Sidebar ===== */}
         <div className="col-span-12 lg:col-span-4 space-y-4">
+          <Card>
+            <CardHeader className="flex items-center justify-between">
+              <CardTitle>Incidents</CardTitle>
+              <div className="flex items-center gap-1.5">
+                <Button variant="ghost" size="sm" onClick={openCreateIncidentDialog} disabled={createIncidentMutation.isPending}>
+                  <Briefcase size={13} /> Create
+                </Button>
+                <Button size="sm" onClick={() => setShowLinkIncidentDialog(true)} disabled={linkIncidentMutation.isPending}>
+                  <Link2 size={13} /> Link
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {(!linkedIncidents || linkedIncidents.length === 0) ? (
+                <div className="text-xs text-muted">
+                  No incidents linked yet. Create one from this alert or link it to an existing incident.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {linkedIncidents.map((incident: Incident2) => (
+                    <Link
+                      key={incident.id}
+                      to={`/incidents/${incident.id}`}
+                      className="block no-underline rounded-md border border-border px-3 py-2 hover:border-accent/40 hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-sm text-heading font-medium truncate">{incident.title}</div>
+                          <div className="text-[11px] text-muted mt-0.5">
+                            {incident.alert_count} alert{incident.alert_count !== 1 ? 's' : ''}
+                            {incident.assigned_username ? ` · ${incident.assigned_username}` : ''}
+                          </div>
+                        </div>
+                        <StatusBadge status={incident.status} />
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Run Playbook */}
           {enabledPlaybooks.length > 0 && !isResolved && (
             <Card>
@@ -985,6 +1101,103 @@ export function AlertDetailPage() {
                 ))}
               </div>
             )}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCreateIncidentDialog} onClose={() => setShowCreateIncidentDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowCreateIncidentDialog(false)}>
+            <DialogTitle>Create Incident from Alert</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={incidentForm.title}
+                onChange={(e) => setIncidentForm((current) => ({ ...current, title: e.target.value }))}
+                placeholder="Incident title"
+              />
+            </div>
+            <div>
+              <Label>Severity</Label>
+              <Select
+                value={incidentForm.severity}
+                onChange={(value) => setIncidentForm((current) => ({ ...current, severity: value }))}
+                options={SEVERITY_OPTIONS}
+                className="w-full"
+              />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea
+                value={incidentForm.description}
+                onChange={(e) => setIncidentForm((current) => ({ ...current, description: e.target.value }))}
+                placeholder="Optional incident description"
+                rows={4}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowCreateIncidentDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => createIncidentMutation.mutate()}
+              disabled={!incidentForm.title.trim() || createIncidentMutation.isPending}
+            >
+              {createIncidentMutation.isPending ? 'Creating...' : 'Create Incident'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showLinkIncidentDialog} onClose={() => setShowLinkIncidentDialog(false)}>
+        <DialogContent>
+          <DialogHeader onClose={() => setShowLinkIncidentDialog(false)}>
+            <DialogTitle>Link to Existing Incident</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="space-y-4">
+            <div>
+              <Label>Search</Label>
+              <Input
+                value={incidentSearch}
+                onChange={(e) => setIncidentSearch(e.target.value)}
+                placeholder="Filter incidents by title, ID, or assignee..."
+              />
+            </div>
+            <div className="max-h-72 overflow-auto space-y-1">
+              {availableIncidents.length === 0 ? (
+                <div className="text-sm text-muted py-4 text-center">
+                  No matching incidents available to link.
+                </div>
+              ) : (
+                availableIncidents.map((incident: Incident2) => (
+                  <button
+                    key={incident.id}
+                    onClick={() => linkIncidentMutation.mutate(incident.id)}
+                    disabled={linkIncidentMutation.isPending}
+                    className={cn(
+                      'w-full flex items-start gap-3 px-3 py-2.5 rounded-md text-left',
+                      'bg-transparent border-none hover:bg-surface-hover cursor-pointer transition-colors',
+                    )}
+                  >
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-accent/15 text-accent shrink-0">
+                      <Briefcase size={13} />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-heading font-medium truncate">{incident.title}</div>
+                      <div className="text-[11px] text-muted mt-0.5">
+                        {incident.status} · {incident.severity}
+                        {incident.assigned_username ? ` · ${incident.assigned_username}` : ''}
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
           </DialogBody>
         </DialogContent>
       </Dialog>

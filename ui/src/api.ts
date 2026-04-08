@@ -394,6 +394,17 @@ export const api = {
       patchJSON<Alert>(`/alerts/${id}`, data),
     claim: (id: string) => postJSON<Alert>(`/alerts/${id}/claim`, {}),
     getRuns: (alertId: string) => fetchJSON<PlaybookRunList>(`/alerts/${alertId}/runs`),
+    getIncidents: (alertId: string) => fetchJSON<Incident2[]>(`/alerts/${alertId}/incidents`),
+    attachIncident: (
+      alertId: string,
+      data: {
+        incident_id?: string
+        title?: string
+        description?: string
+        severity?: string
+        tags?: string[]
+      },
+    ) => postJSON<Incident2>(`/alerts/${alertId}/incidents`, data),
     getActivities: (alertId: string) => fetchJSON<ActivityList>(`/alerts/${alertId}/activities`),
     addComment: (alertId: string, text: string) =>
       postJSON<Activity>(`/alerts/${alertId}/comments`, { text }),

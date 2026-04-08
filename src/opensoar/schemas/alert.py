@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class AlertResponse(BaseModel):
@@ -67,3 +67,23 @@ class BulkOperationResult(BaseModel):
     updated: int
     failed: int
     errors: list[str] = []
+
+
+class AlertIncidentRequest(BaseModel):
+    incident_id: str | None = None
+    title: str | None = None
+    description: str | None = None
+    severity: str = "medium"
+    tags: list[str] | None = None
+
+    @model_validator(mode="after")
+    def validate_request(self) -> "AlertIncidentRequest":
+        has_incident_id = bool(self.incident_id)
+        has_title = bool(self.title and self.title.strip())
+
+        if has_incident_id == has_title:
+            raise ValueError(
+                "Provide either incident_id to link an existing incident or title to create a new one."
+            )
+
+        return self

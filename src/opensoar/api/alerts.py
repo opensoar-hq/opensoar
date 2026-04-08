@@ -8,14 +8,17 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
-from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.jwt import get_current_analyst, require_analyst
+from opensoar.auth.rbac import Permission, has_permission
 from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
+from opensoar.models.incident import Incident
+from opensoar.models.incident_alert import IncidentAlert
 from opensoar.models.playbook_run import PlaybookRun
-from opensoar.auth.jwt import require_analyst
 from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.schemas.alert import (
+    AlertIncidentRequest,
     AlertDetailResponse,
     AlertList,
     AlertResponse,
@@ -23,11 +26,24 @@ from opensoar.schemas.alert import (
     BulkAlertUpdate,
     BulkOperationResult,
 )
+from opensoar.schemas.incident import IncidentResponse
 from opensoar.schemas.playbook_run import PlaybookRunList, PlaybookRunResponse
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 VALID_DETERMINATIONS = {"unknown", "malicious", "suspicious", "benign"}
+
+
+async def _incident_response(
+    session: AsyncSession, incident: Incident
+) -> IncidentResponse:
+    count_query = select(func.count(IncidentAlert.id)).where(
+        IncidentAlert.incident_id == incident.id
+    )
+    alert_count = (await session.execute(count_query)).scalar() or 0
+    resp = IncidentResponse.model_validate(incident)
+    resp.alert_count = alert_count
+    return resp
 
 
 @router.get("", response_model=AlertList)
@@ -146,6 +162,145 @@ async def get_alert_runs(
         runs=[PlaybookRunResponse.model_validate(r) for r in runs],
         total=total,
     )
+
+
+@router.get("/{alert_id}/incidents", response_model=list[IncidentResponse])
+async def get_alert_incidents(
+    alert_id: uuid.UUID,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    result = await session.execute(select(Alert).where(Alert.id == alert_id))
+    alert = result.scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    query = (
+        select(Incident)
+        .join(IncidentAlert, IncidentAlert.incident_id == Incident.id)
+        .where(IncidentAlert.alert_id == alert_id)
+        .order_by(Incident.created_at.desc())
+    )
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="incident",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    result = await session.execute(query)
+    incidents = result.scalars().all()
+    return [await _incident_response(session, incident) for incident in incidents]
+
+
+@router.post("/{alert_id}/incidents", response_model=IncidentResponse, status_code=201)
+async def create_or_link_incident_for_alert(
+    alert_id: uuid.UUID,
+    data: AlertIncidentRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_analyst),
+):
+    result = await session.execute(select(Alert).where(Alert.id == alert_id))
+    alert = result.scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    created_new_incident = False
+
+    if data.incident_id:
+        if not has_permission(analyst.role, Permission.INCIDENTS_UPDATE):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission denied: requires {Permission.INCIDENTS_UPDATE}",
+            )
+
+        result = await session.execute(
+            select(Incident).where(Incident.id == uuid.UUID(data.incident_id))
+        )
+        incident = result.scalar_one_or_none()
+        if not incident:
+            raise HTTPException(status_code=404, detail="Incident not found")
+        await enforce_tenant_access(
+            request.app,
+            resource=incident,
+            resource_type="incident",
+            action="update",
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
+    else:
+        if not has_permission(analyst.role, Permission.INCIDENTS_CREATE):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Permission denied: requires {Permission.INCIDENTS_CREATE}",
+            )
+
+        incident = Incident(
+            title=(data.title or "").strip(),
+            description=data.description,
+            severity=data.severity,
+            tags=data.tags,
+        )
+        session.add(incident)
+        await session.flush()
+        created_new_incident = True
+
+    existing = await session.execute(
+        select(IncidentAlert).where(
+            IncidentAlert.incident_id == incident.id,
+            IncidentAlert.alert_id == alert_id,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Alert already linked to this incident")
+
+    session.add(IncidentAlert(incident_id=incident.id, alert_id=alert_id))
+    session.add(
+        Activity(
+            alert_id=alert_id,
+            analyst_id=analyst.id,
+            analyst_username=analyst.username,
+            action="incident_linked",
+            detail=(
+                f"Created and linked incident {incident.title}"
+                if created_new_incident
+                else f"Linked to incident {incident.title}"
+            ),
+            metadata_json={
+                "incident_id": str(incident.id),
+                "incident_title": incident.title,
+                "created_new_incident": created_new_incident,
+            },
+        )
+    )
+
+    await session.commit()
+    await session.refresh(incident)
+    return await _incident_response(session, incident)
 
 
 @router.patch("/{alert_id}", response_model=AlertResponse)
