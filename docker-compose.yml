@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: opensoar
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensoar_dev}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -115,7 +115,7 @@ services:
       target: api
     command: uvicorn opensoar.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
-      - "8000:8000"
+      - "${API_HOST_PORT:-8000}:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
@@ -173,7 +173,7 @@ services:
       context: .
       target: ui
     ports:
-      - "3000:80"
+      - "${UI_HOST_PORT:-3000}:80"
     depends_on:
       - api
 

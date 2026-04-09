@@ -13,7 +13,9 @@ COPY playbooks/ ./playbooks/
 COPY migrations/ ./migrations/
 COPY alembic.ini ./
 
-RUN uv pip install --system .
+# Reinstall after copying the source tree so the runtime package in
+# site-packages stays aligned with the current checkout.
+RUN uv pip install --system --reinstall .
 
 # Create non-root user for running services
 RUN groupadd -r opensoar && useradd -r -g opensoar -d /app -s /sbin/nologin opensoar \

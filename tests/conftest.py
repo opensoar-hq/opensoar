@@ -13,10 +13,10 @@ os.environ.setdefault("LOCAL_REGISTRATION_ENABLED", "true")
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from opensoar.db import Base
-import opensoar.models  # noqa: F401 - populate core metadata for drop_all/create paths
+import opensoar.models  # noqa: F401 - load model definitions for the test app
 from opensoar.plugins import import_optional_plugin_models
 
 import_optional_plugin_models()
@@ -34,17 +34,20 @@ async def db_engine():
 
     Uses Alembic migrations (not Base.metadata.create_all) so tests exercise
     the same schema path as production.  This catches missing migrations early.
+    Resets role-owned objects to recover from stale local DB state.
     """
     import subprocess
 
-    from sqlalchemy import text
-
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
 
-    # Drop all tables first for a clean slate (including alembic_version)
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+    async def reset_test_database() -> None:
+        async with eng.begin() as conn:
+            # The test database is dedicated to this role. Dropping everything
+            # owned by the current user clears stale Alembic tables and relation
+            # row types without requiring ownership of the public schema itself.
+            await conn.execute(text("DROP OWNED BY CURRENT_USER CASCADE"))
+
+    await reset_test_database()
 
     # Run Alembic migrations against the test database (same as production)
     project_root = os.path.join(os.path.dirname(__file__), "..")
@@ -62,8 +65,7 @@ async def db_engine():
 
     yield eng
 
-    async with eng.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    await reset_test_database()
     await eng.dispose()
 
 
