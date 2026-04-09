@@ -74,14 +74,24 @@ class PlaybookRegistry:
 
         for key, expected in conditions.items():
             actual = alert_data.get(key)
-
-            if isinstance(expected, list):
-                if actual not in expected:
-                    return False
-            elif actual != expected:
+            if not self._condition_value_matches(expected, actual):
                 return False
 
         return True
+
+    def _condition_value_matches(self, expected, actual) -> bool:
+        if actual is None:
+            return False
+
+        if isinstance(actual, list):
+            if isinstance(expected, list):
+                return any(item in expected for item in actual)
+            return expected in actual
+
+        if isinstance(expected, list):
+            return actual in expected
+
+        return actual == expected
 
     async def sync_to_db(self, session: AsyncSession) -> None:
         registry = get_playbook_registry()

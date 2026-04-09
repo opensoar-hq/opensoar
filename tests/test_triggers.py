@@ -27,6 +27,21 @@ class TestConditionsMatch:
         assert self.registry._conditions_match(conditions, {"severity": "critical"}) is True
         assert self.registry._conditions_match(conditions, {"severity": "low"}) is False
 
+    def test_scalar_condition_matches_list_valued_alert_field(self):
+        conditions = {"tags": "phishing"}
+        alert_data = {"tags": ["email", "phishing"]}
+        assert self.registry._conditions_match(conditions, alert_data) is True
+
+    def test_list_condition_matches_list_valued_alert_field_on_overlap(self):
+        conditions = {"tags": ["ai-brain", "docker"]}
+        alert_data = {"tags": ["ai-brain", "automation"]}
+        assert self.registry._conditions_match(conditions, alert_data) is True
+
+    def test_list_condition_does_not_match_list_valued_alert_field_without_overlap(self):
+        conditions = {"tags": ["ai-brain", "docker"]}
+        alert_data = {"tags": ["phishing", "email"]}
+        assert self.registry._conditions_match(conditions, alert_data) is False
+
     def test_multiple_conditions(self):
         conditions = {"severity": "high", "source": "elastic"}
         assert (
