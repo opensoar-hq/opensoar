@@ -6,6 +6,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from unittest.mock import MagicMock, patch
 
+import asyncpg
 # Set required secrets before any opensoar imports (config validates on import)
 os.environ.setdefault("JWT_SECRET", "test-secret-which-is-long-enough-for-hs256")
 os.environ.setdefault("API_KEY_SECRET", "test-api-key-secret")
@@ -13,7 +14,7 @@ os.environ.setdefault("LOCAL_REGISTRATION_ENABLED", "true")
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import opensoar.models  # noqa: F401 - load model definitions for the test app
@@ -28,26 +29,50 @@ TEST_DATABASE_URL = os.environ.get(
 )
 
 
+async def _recreate_test_database(database_url: str) -> None:
+    url = make_url(database_url)
+    database_name = url.database
+    if not database_name:
+        raise RuntimeError("DATABASE_URL must include a database name for test setup")
+
+    maintenance_db = "postgres" if database_name != "postgres" else "template1"
+    admin_url = url.set(database=maintenance_db)
+
+    conn = await asyncpg.connect(
+        user=admin_url.username,
+        password=admin_url.password,
+        host=admin_url.host,
+        port=admin_url.port or 5432,
+        database=admin_url.database,
+    )
+    try:
+        await conn.execute(
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = $1 AND pid <> pg_backend_pid()
+            """,
+            database_name,
+        )
+        await conn.execute(f'DROP DATABASE IF EXISTS "{database_name}"')
+        await conn.execute(f'CREATE DATABASE "{database_name}"')
+    finally:
+        await conn.close()
+
+
 @pytest.fixture(scope="session")
 async def db_engine():
     """Create engine and apply migrations once per session.
 
     Uses Alembic migrations (not Base.metadata.create_all) so tests exercise
     the same schema path as production.  This catches missing migrations early.
-    Resets role-owned objects to recover from stale local DB state.
+    Recreates the dedicated test database to recover from stale local DB
+    state without relying on schema- or role-wide destructive commands.
     """
     import subprocess
 
+    await _recreate_test_database(TEST_DATABASE_URL)
     eng = create_async_engine(TEST_DATABASE_URL, echo=False)
-
-    async def reset_test_database() -> None:
-        async with eng.begin() as conn:
-            # The test database is dedicated to this role. Dropping everything
-            # owned by the current user clears stale Alembic tables and relation
-            # row types without requiring ownership of the public schema itself.
-            await conn.execute(text("DROP OWNED BY CURRENT_USER CASCADE"))
-
-    await reset_test_database()
 
     # Run Alembic migrations against the test database (same as production)
     project_root = os.path.join(os.path.dirname(__file__), "..")
@@ -65,8 +90,8 @@ async def db_engine():
 
     yield eng
 
-    await reset_test_database()
     await eng.dispose()
+    await _recreate_test_database(TEST_DATABASE_URL)
 
 
 @pytest.fixture(scope="session")
