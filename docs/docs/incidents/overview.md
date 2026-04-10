@@ -8,6 +8,8 @@ This page defines how incidents are meant to work in OpenSOAR today.
 
 Incidents are the case-management layer above individual alerts. They exist so analysts can group related alerts, coordinate ownership, leave notes, and track investigation artifacts in one place.
 
+In the current core release, the incident workflow is no longer just an API concept. It is an operator-facing workflow exposed directly in the alert and incident detail pages.
+
 ## What an Incident Contains
 
 An incident can now contain:
@@ -16,6 +18,7 @@ An incident can now contain:
 - assignment / ownership
 - comments and lifecycle timeline events
 - incident-scoped observables
+- lightweight source-IP-based correlation suggestions from the incidents list
 
 That means the incident page is intended to be the working surface for grouped investigation, not just a static record.
 
@@ -27,6 +30,8 @@ When an alert clearly belongs to a broader case, create a new incident from the 
 
 That keeps the analyst in context and avoids raw UUID copy/paste workflows.
 
+This is the intended escalation path when an alert stops being a single-alert triage task and becomes broader casework.
+
 ### 2. Use the Incident as the Working Hub
 
 Once an incident exists, use it to:
@@ -35,6 +40,7 @@ Once an incident exists, use it to:
 - link additional alerts
 - leave comments and handoff notes
 - add observables discovered during investigation
+- edit your own incident comments when the handoff note or context needs correction
 
 ### 3. Track the Timeline
 
@@ -98,8 +104,10 @@ Examples:
 - `PATCH /api/v1/incidents/{incident_id}`
 - `GET /api/v1/incidents/{incident_id}/activities`
 - `POST /api/v1/incidents/{incident_id}/comments`
+- `PATCH /api/v1/incidents/{incident_id}/comments/{comment_id}`
 - `GET /api/v1/incidents/{incident_id}/alerts`
 - `POST /api/v1/incidents/{incident_id}/alerts`
+- `DELETE /api/v1/incidents/{incident_id}/alerts/{alert_id}`
 - `GET /api/v1/incidents/{incident_id}/observables`
 - `POST /api/v1/incidents/{incident_id}/observables`
 - `GET /api/v1/incidents/suggestions`

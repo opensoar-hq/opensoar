@@ -20,6 +20,7 @@ The default stack starts:
 
 - API
 - worker
+- migrate
 - PostgreSQL
 - Redis
 - UI
@@ -41,6 +42,8 @@ docker compose exec api opensoar-bootstrap-admin \
   --display-name "OpenSOAR Admin"
 ```
 
+Sign in with that local admin, then create any additional local accounts from the Settings UI. Public self-registration is disabled by default in the core deployment model.
+
 Then open:
 
 - API: `http://localhost:8000`
@@ -53,7 +56,20 @@ When updating an existing Docker Compose install after pulling new code, use:
 docker compose up -d --build
 ```
 
-That refreshes the migration and app images together so schema changes are applied before the API starts.
+That refreshes the migration and app images together so schema changes are applied before the API and worker start.
+
+## Port Overrides
+
+If common local ports are already occupied, copy `.env.example` to `.env` and set host overrides such as:
+
+```text
+POSTGRES_HOST_PORT=15433
+REDIS_HOST_PORT=16379
+API_HOST_PORT=18001
+UI_HOST_PORT=13000
+```
+
+Those overrides only affect the host-side ports for the local root Compose workflow.
 
 ## Verify Ingestion
 
@@ -70,6 +86,13 @@ curl -X POST http://localhost:8000/api/v1/webhooks/alerts \
 ```
 
 If the stack is healthy, the alert should be accepted and routed through the normal ingestion flow.
+
+From there, the normal operator path is:
+
+1. review the alert in the UI
+2. claim or assign it if needed
+3. create a new incident from the alert or link it to an existing one when the work becomes case-level
+4. use the incident page for comments, assignment, observables, and grouped investigation
 
 ## Understand The Automation Model
 

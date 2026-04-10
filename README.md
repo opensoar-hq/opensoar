@@ -88,13 +88,13 @@ Tracecat is the closest competitor in philosophy (YC-backed, developer-focused) 
 ## Features
 
 - [x] **Webhook ingestion** — automatic normalization (Elastic, generic JSON), IOC extraction, deduplication
-- [x] **Python-native playbooks** — `@playbook` and `@action` decorators, `asyncio.gather()` for parallelism, retry/timeout per action
+- [x] **Python-native playbooks** — `@playbook` and `@action` decorators, `asyncio.gather()` for parallelism, retry/timeout per action, explicit `order=` for sequential match execution
 - [x] **Trigger engine** — match alerts to playbooks by severity, source, or field conditions
 - [x] **Integrations** — Elastic Security, VirusTotal, AbuseIPDB, Slack, Email, extensible via Python SDK
-- [x] **Case management** — incidents, observables, correlation suggestions
+- [x] **Case management** — create/link incidents from alerts, assign cases, comment on the timeline, add observables, review lightweight correlation suggestions
 - [x] **AI-powered** — LLM summarization, triage recommendations, playbook generation, auto-resolve, correlation (Claude, OpenAI, Ollama)
-- [x] **Dashboard & UI** — React 19, dark theme, priority queue, MTTR, per-partner MSSP stats
-- [x] **Auth & RBAC** — JWT + API keys, admin-managed local accounts, 3 core roles
+- [x] **Dashboard & UI** — React 19, dark theme, priority queue, MTTR, per-partner MSSP stats, alert-to-incident workflow
+- [x] **Auth & RBAC** — JWT + API keys, explicit first-admin bootstrap, admin-managed local accounts, 3 core roles, no public registration into privileged roles
 - [x] **Celery workers** — async execution with horizontal scaling
 - [x] **Plugin architecture** — load optional enterprise features if installed
 

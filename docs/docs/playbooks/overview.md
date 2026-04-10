@@ -45,6 +45,7 @@ The `@playbook` decorator defines:
 - matching conditions
 - optional description
 - whether the playbook is enabled
+- optional execution `order`
 
 ### `@action`
 
@@ -65,6 +66,31 @@ vt_result, abuse_result = await asyncio.gather(
     lookup_abuseipdb(source_ip),
 )
 ```
+
+### Explicit Execution Order
+
+When multiple playbooks match the same alert, OpenSOAR executes them in ascending `order`.
+
+```python
+@playbook(
+    trigger="webhook",
+    conditions={"tags": ["docker"]},
+    order=10,
+)
+async def prepare_docker_recovery(alert_data):
+    ...
+
+
+@playbook(
+    trigger="webhook",
+    conditions={"tags": ["docker"]},
+    order=20,
+)
+async def restart_docker_service(alert_data):
+    ...
+```
+
+Lower numbers run first. The default is `1000`, so only set `order` when the sequence matters operationally.
 
 ### Resolving The Current Alert
 
@@ -130,6 +156,8 @@ For the broader status/determination model, read [Alert Lifecycle](../alerts/lif
 3. Start or restart the API and worker so the playbook is discovered consistently.
 4. Confirm it appears in the playbooks API or UI.
 5. Trigger it with a matching alert.
+
+The API and UI expose the persisted `execution_order`, and the playbooks list is returned in that order.
 
 ## What OpenSOAR Does Not Have Yet
 

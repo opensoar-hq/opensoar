@@ -47,6 +47,7 @@ That mount is what makes local playbook iteration possible.
 - restarting `api` refreshes in-process playbook discovery
 - restarting `worker` ensures execution uses the latest playbook code
 - `migrate` is for Alembic schema migrations only
+- in the default root `docker-compose.yml`, `api` and `worker` both wait for `migrate` to complete successfully before they start
 - `JWT_SECRET` and `API_KEY_SECRET` must both be set to non-empty values or startup will fail fast
 
 ## Production Advice
@@ -70,6 +71,14 @@ docker compose -f deploy/docker-compose.yml up -d
 ```
 
 That keeps the `migrate`, `api`, `worker`, and `ui` images aligned during the upgrade.
+
+For the root repository Compose path used by most local and single-host operators:
+
+```bash
+docker compose up -d --build
+```
+
+That path rebuilds the local `migrate`, `api`, `worker`, and `ui` images from the current checkout so schema and runtime changes move together.
 
 ## Post-Upgrade Validation
 

@@ -31,6 +31,7 @@ In other words:
 
 - you can list playbooks through the API
 - you can toggle enablement through the API
+- you can inspect the persisted `execution_order` used for multi-playbook sequencing
 - you can trigger a discovered playbook through the API
 - you cannot upload a new Python playbook through the API today
 
@@ -45,8 +46,10 @@ Examples:
 - `PATCH /api/v1/incidents/{incident_id}`
 - `GET /api/v1/incidents/{incident_id}/activities`
 - `POST /api/v1/incidents/{incident_id}/comments`
+- `PATCH /api/v1/incidents/{incident_id}/comments/{comment_id}`
 - `GET /api/v1/incidents/{incident_id}/alerts`
 - `POST /api/v1/incidents/{incident_id}/alerts`
+- `DELETE /api/v1/incidents/{incident_id}/alerts/{alert_id}`
 - `GET /api/v1/incidents/{incident_id}/observables`
 - `POST /api/v1/incidents/{incident_id}/observables`
 - `GET /api/v1/incidents/suggestions`
