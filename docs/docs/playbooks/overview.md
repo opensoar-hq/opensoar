@@ -47,6 +47,31 @@ The `@playbook` decorator defines:
 - whether the playbook is enabled
 - optional execution `order`
 
+Condition matching follows a simple rule set:
+
+- different condition keys are combined with logical `AND`
+- scalar fields match by exact equality
+- list-valued condition fields such as `tags` match on overlap
+
+So this playbook:
+
+```python
+@playbook(
+    trigger="webhook",
+    conditions={
+        "hostname": "ai-brain",
+        "tags": ["authentication", "brute-force"],
+        "severity": ["high", "critical"],
+    },
+)
+```
+
+only matches when all three things are true at once:
+
+- the alert `hostname` is exactly `ai-brain`
+- the alert `tags` overlap with either `authentication` or `brute-force`
+- the alert `severity` is `high` or `critical`
+
 ### `@action`
 
 The `@action` decorator wraps a step with:

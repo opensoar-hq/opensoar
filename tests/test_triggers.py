@@ -57,6 +57,32 @@ class TestConditionsMatch:
             is False
         )
 
+    def test_all_conditions_must_match_even_when_tag_overlap_matches(self):
+        conditions = {
+            "hostname": "ai-brain",
+            "tags": ["authentication", "brute-force"],
+            "severity": ["high", "critical"],
+        }
+        alert_data = {
+            "hostname": "web-prod-01",
+            "tags": ["authentication", "brute-force"],
+            "severity": "high",
+        }
+        assert self.registry._conditions_match(conditions, alert_data) is False
+
+    def test_all_conditions_match_with_scalar_and_list_fields(self):
+        conditions = {
+            "hostname": "ai-brain",
+            "tags": ["authentication", "brute-force"],
+            "severity": ["high", "critical"],
+        }
+        alert_data = {
+            "hostname": "ai-brain",
+            "tags": ["authentication", "brute-force"],
+            "severity": "high",
+        }
+        assert self.registry._conditions_match(conditions, alert_data) is True
+
     def test_missing_field_no_match(self):
         assert self.registry._conditions_match({"severity": "high"}, {}) is False
 
