@@ -141,9 +141,9 @@ Areas where help is most needed:
 
 ---
 
-## Part of the open-source modern SOC
+## Part of PwnKit Labs
 
-OpenSOAR is one piece of a three-part open-source security stack:
+**Open-source adversarial security for the agentic AI era.** OpenSOAR is one piece of the open-source PwnKit Labs stack:
 - **[pwnkit](https://github.com/PwnKit-Labs/pwnkit)** — AI agent pentester (detect)
 - **[foxguard](https://github.com/PwnKit-Labs/foxguard)** — Rust security scanner (prevent)
 - **[opensoar](https://github.com/opensoar-hq/opensoar-core)** — Python-native SOAR platform (respond)
