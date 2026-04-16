@@ -295,6 +295,14 @@ class TestUpdateAlert:
         )
         assert resp.status_code == 404
 
+    async def test_update_requires_auth(self, client, sample_alert_via_api):
+        alert_id = sample_alert_via_api["alert_id"]
+        resp = await client.patch(
+            f"/api/v1/alerts/{alert_id}",
+            json={"severity": "critical"},
+        )
+        assert resp.status_code == 401
+
     async def test_tenant_validator_blocks_alert_update(self, client, registered_analyst):
         from opensoar.main import app
         from opensoar.plugins import register_tenant_access_validator
@@ -344,17 +352,28 @@ class TestClaimAlert:
 
 
 class TestDeleteAlert:
-    async def test_delete_alert(self, client, sample_alert_via_api):
+    async def test_delete_alert(self, client, sample_alert_via_api, registered_analyst):
         alert_id = sample_alert_via_api["alert_id"]
-        resp = await client.delete(f"/api/v1/alerts/{alert_id}")
+        resp = await client.delete(
+            f"/api/v1/alerts/{alert_id}",
+            headers=registered_analyst["headers"],
+        )
         assert resp.status_code == 200
 
         resp = await client.get(f"/api/v1/alerts/{alert_id}")
         assert resp.status_code == 404
 
-    async def test_delete_nonexistent(self, client):
-        resp = await client.delete(f"/api/v1/alerts/{uuid.uuid4()}")
+    async def test_delete_nonexistent(self, client, registered_analyst):
+        resp = await client.delete(
+            f"/api/v1/alerts/{uuid.uuid4()}",
+            headers=registered_analyst["headers"],
+        )
         assert resp.status_code == 404
+
+    async def test_delete_requires_auth(self, client, sample_alert_via_api):
+        alert_id = sample_alert_via_api["alert_id"]
+        resp = await client.delete(f"/api/v1/alerts/{alert_id}")
+        assert resp.status_code == 401
 
 
 class TestBulkOperations:

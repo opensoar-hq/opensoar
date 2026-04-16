@@ -52,7 +52,11 @@ class Settings(BaseSettings):
     def effective_celery_broker_url(self) -> str:
         return self.celery_broker_url or self.redis_url
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
 
 settings = Settings()
