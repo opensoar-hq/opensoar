@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.rbac import Permission, require_permission
 from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.models.analyst import Analyst
 from opensoar.models.observable import Observable
@@ -71,7 +72,7 @@ async def create_observable(
     data: ObservableCreate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.OBSERVABLES_MANAGE)),
 ):
     # Dedup by type + value
     existing = await session.execute(
@@ -137,7 +138,7 @@ async def add_enrichment(
     data: EnrichmentCreate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.OBSERVABLES_MANAGE)),
 ):
     result = await session.execute(
         select(Observable).where(Observable.id == observable_id)

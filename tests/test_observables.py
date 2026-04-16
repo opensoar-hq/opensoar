@@ -84,6 +84,27 @@ class TestObservablesCRUD:
         )
         assert resp1.json()["id"] == resp2.json()["id"]
 
+    async def test_create_observable_requires_auth(self, client):
+        resp = await client.post(
+            "/api/v1/observables",
+            json={"type": "ip", "value": "198.51.100.200", "source": "auth-test"},
+        )
+        assert resp.status_code == 401
+
+    async def test_add_enrichment_requires_auth(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/observables",
+            json={"type": "ip", "value": "203.0.113.250", "source": "auth-test"},
+            headers=registered_analyst["headers"],
+        )
+        obs_id = create.json()["id"]
+
+        resp = await client.post(
+            f"/api/v1/observables/{obs_id}/enrichments",
+            json={"source": "vt", "data": {"score": 10}, "malicious": True, "score": 10},
+        )
+        assert resp.status_code == 401
+
 
 class TestCorrelationEngine:
     async def test_auto_correlate_by_source_ip(self, client, registered_analyst):
