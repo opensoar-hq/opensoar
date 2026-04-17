@@ -30,6 +30,7 @@ class PlaybookMeta:
     description: str = ""
     enabled: bool = True
     order: int = 1000
+    priority: str = "default"
 
 
 @dataclass
@@ -154,6 +155,9 @@ def action(
     return decorator
 
 
+_VALID_PLAYBOOK_PRIORITIES = ("high", "default", "low")
+
+
 def playbook(
     trigger: str | None = None,
     *,
@@ -161,7 +165,14 @@ def playbook(
     description: str = "",
     name: str | None = None,
     order: int = 1000,
+    priority: str = "default",
 ) -> Callable:
+    if priority not in _VALID_PLAYBOOK_PRIORITIES:
+        raise ValueError(
+            f"Invalid playbook priority {priority!r}; "
+            f"expected one of {_VALID_PLAYBOOK_PRIORITIES}"
+        )
+
     def decorator(func: Callable) -> Callable:
         meta = PlaybookMeta(
             name=name or func.__name__,
@@ -169,6 +180,7 @@ def playbook(
             conditions=conditions or {},
             description=description,
             order=order,
+            priority=priority,
         )
         func._soar_playbook = meta
 
