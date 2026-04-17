@@ -5,7 +5,10 @@ from typing import Any
 import aiohttp
 
 from opensoar.core.decorators import action
+from opensoar.integrations import cache as _cache_module
 from opensoar.integrations.base import ActionDefinition, HealthCheckResult, IntegrationBase
+
+_SOURCE = "virustotal"
 
 
 class VirusTotalIntegration(IntegrationBase):
@@ -61,20 +64,50 @@ class VirusTotalIntegration(IntegrationBase):
     async def lookup_ip(self, ip: str) -> dict:
         if not self._client:
             raise RuntimeError("Not connected")
-        async with self._client.get(f"/ip_addresses/{ip}") as resp:
-            return await resp.json()
+
+        async def _fetch() -> dict:
+            async with self._client.get(f"/ip_addresses/{ip}") as resp:
+                return await resp.json()
+
+        return await _cache_module.get_default_cache().get_or_fetch(
+            source=_SOURCE,
+            obs_type="ip",
+            value=ip,
+            fetcher=_fetch,
+            ttl_seconds=_cache_module.default_ttl_for(_SOURCE),
+        )
 
     async def lookup_hash(self, file_hash: str) -> dict:
         if not self._client:
             raise RuntimeError("Not connected")
-        async with self._client.get(f"/files/{file_hash}") as resp:
-            return await resp.json()
+
+        async def _fetch() -> dict:
+            async with self._client.get(f"/files/{file_hash}") as resp:
+                return await resp.json()
+
+        return await _cache_module.get_default_cache().get_or_fetch(
+            source=_SOURCE,
+            obs_type="hash",
+            value=file_hash,
+            fetcher=_fetch,
+            ttl_seconds=_cache_module.default_ttl_for(_SOURCE),
+        )
 
     async def lookup_domain(self, domain: str) -> dict:
         if not self._client:
             raise RuntimeError("Not connected")
-        async with self._client.get(f"/domains/{domain}") as resp:
-            return await resp.json()
+
+        async def _fetch() -> dict:
+            async with self._client.get(f"/domains/{domain}") as resp:
+                return await resp.json()
+
+        return await _cache_module.get_default_cache().get_or_fetch(
+            source=_SOURCE,
+            obs_type="domain",
+            value=domain,
+            fetcher=_fetch,
+            ttl_seconds=_cache_module.default_ttl_for(_SOURCE),
+        )
 
     async def disconnect(self) -> None:
         if self._client:
