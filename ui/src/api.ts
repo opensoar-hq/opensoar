@@ -425,6 +425,24 @@ export interface Observable {
   created_at: string
 }
 
+export interface IncidentTemplate {
+  id: string
+  name: string
+  description: string | null
+  default_severity: string
+  default_tags: string[]
+  playbook_ids: string[]
+  observable_types: string[]
+  tenant_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface IncidentTemplateList {
+  templates: IncidentTemplate[]
+  total: number
+}
+
 export interface IncidentSuggestion {
   source_ip: string
   alert_count: number
@@ -581,8 +599,13 @@ export const api = {
       return fetchJSON<{ incidents: Incident2[]; total: number }>(`/incidents${q ? `?${q}` : ''}`)
     },
     get: (id: string) => fetchJSON<Incident2>(`/incidents/${id}`),
-    create: (data: { title: string; severity?: string; description?: string }) =>
-      postJSON<Incident2>('/incidents', data),
+    create: (data: {
+      title: string
+      severity?: string
+      description?: string
+      template_id?: string
+      tags?: string[]
+    }) => postJSON<Incident2>('/incidents', data as Record<string, unknown>),
     update: (id: string, data: Record<string, unknown>) =>
       patchJSON<Incident2>(`/incidents/${id}`, data),
     alerts: (id: string) => fetchJSON<Alert[]>(`/incidents/${id}/alerts`),
@@ -607,6 +630,22 @@ export const api = {
     unlinkAlert: (id: string, alertId: string) =>
       deleteJSON(`/incidents/${id}/alerts/${alertId}`),
     suggestions: () => fetchJSON<IncidentSuggestion[]>('/incidents/suggestions'),
+  },
+  incidentTemplates: {
+    list: () => fetchJSON<IncidentTemplateList>('/incident-templates'),
+    get: (id: string) => fetchJSON<IncidentTemplate>(`/incident-templates/${id}`),
+    create: (data: {
+      name: string
+      description?: string
+      default_severity?: string
+      default_tags?: string[]
+      playbook_ids?: string[]
+      observable_types?: string[]
+      tenant_id?: string | null
+    }) => postJSON<IncidentTemplate>('/incident-templates', data as Record<string, unknown>),
+    update: (id: string, data: Record<string, unknown>) =>
+      patchJSON<IncidentTemplate>(`/incident-templates/${id}`, data),
+    remove: (id: string) => deleteJSON(`/incident-templates/${id}`),
   },
   observables: {
     list: (params?: { type?: string; limit?: number; offset?: number }) => {

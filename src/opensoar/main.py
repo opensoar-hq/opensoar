@@ -18,6 +18,7 @@ from opensoar.api.api_keys import router as api_keys_router
 from opensoar.api.auth import router as auth_router
 from opensoar.api.dashboard import router as dashboard_router
 from opensoar.api.health import router as health_router
+from opensoar.api.incident_templates import router as incident_templates_router
 from opensoar.api.incidents import router as incidents_router
 from opensoar.api.integrations import router as integrations_router
 from opensoar.api.metrics import router as metrics_router
@@ -100,6 +101,7 @@ app.include_router(activities_router, prefix="/api/v1")
 app.include_router(playbooks_router, prefix="/api/v1")
 app.include_router(runs_router, prefix="/api/v1")
 app.include_router(incidents_router, prefix="/api/v1")
+app.include_router(incident_templates_router, prefix="/api/v1")
 app.include_router(integrations_router, prefix="/api/v1")
 app.include_router(observables_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
