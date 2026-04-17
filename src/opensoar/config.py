@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         return self
     vt_api_key: str | None = None
     abuseipdb_api_key: str | None = None
+    shodan_api_key: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     ollama_url: str | None = None
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     enrichment_cache_ttl_virustotal: int = 24 * 3600
     enrichment_cache_ttl_abuseipdb: int = 12 * 3600
     enrichment_cache_ttl_greynoise: int = 6 * 3600
+    enrichment_cache_ttl_shodan: int = 24 * 3600
 
     @property
     def playbook_directories(self) -> list[str]:

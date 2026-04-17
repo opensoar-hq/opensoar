@@ -24,6 +24,7 @@ class IntegrationLoader:
             ("elastic", "opensoar.integrations.elastic.connector", "ElasticIntegration"),
             ("virustotal", "opensoar.integrations.virustotal.connector", "VirusTotalIntegration"),
             ("abuseipdb", "opensoar.integrations.abuseipdb.connector", "AbuseIPDBIntegration"),
+            ("shodan", "opensoar.integrations.shodan.connector", "ShodanIntegration"),
             ("slack", "opensoar.integrations.slack.connector", "SlackIntegration"),
             ("email", "opensoar.integrations.email.connector", "EmailIntegration"),
             ("splunk", "opensoar.integrations.splunk.connector", "SplunkIntegration"),

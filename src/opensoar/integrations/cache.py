@@ -165,6 +165,7 @@ def default_ttl_for(source: str) -> int:
         "virustotal": getattr(settings, "enrichment_cache_ttl_virustotal", 24 * 3600),
         "abuseipdb": getattr(settings, "enrichment_cache_ttl_abuseipdb", 12 * 3600),
         "greynoise": getattr(settings, "enrichment_cache_ttl_greynoise", 6 * 3600),
+        "shodan": getattr(settings, "enrichment_cache_ttl_shodan", 24 * 3600),
     }
     return int(table.get(source, getattr(settings, "enrichment_cache_ttl_default", 3600)))
 
