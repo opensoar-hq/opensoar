@@ -11,6 +11,7 @@ class IntegrationCreate(BaseModel):
     integration_type: str
     name: str
     partner: str | None = None
+    tenant_id: uuid.UUID | None = None
     config: dict[str, Any] = {}
     enabled: bool = True
 
@@ -18,6 +19,7 @@ class IntegrationCreate(BaseModel):
 class IntegrationUpdate(BaseModel):
     name: str | None = None
     partner: str | None = None
+    tenant_id: uuid.UUID | None = None
     config: dict[str, Any] | None = None
     enabled: bool | None = None
 
@@ -27,6 +29,7 @@ class IntegrationResponse(BaseModel):
     integration_type: str
     name: str
     partner: str | None = None
+    tenant_id: uuid.UUID | None = None
     enabled: bool
     health_status: str | None = None
     last_health_check: datetime | None = None
