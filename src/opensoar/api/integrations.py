@@ -73,6 +73,7 @@ async def create_integration(
         integration_type=data.integration_type,
         name=data.name,
         partner=data.partner,
+        tenant_id=data.tenant_id,
         config=data.config,
         enabled=data.enabled,
     )

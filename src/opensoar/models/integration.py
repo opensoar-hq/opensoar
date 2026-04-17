@@ -1,7 +1,8 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from opensoar.db import Base
@@ -13,6 +14,9 @@ class IntegrationInstance(Base):
     integration_type: Mapped[str] = mapped_column(String(100))
     name: Mapped[str] = mapped_column(String(255))
     partner: Mapped[str | None] = mapped_column(String(100))
+    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     config: Mapped[dict] = mapped_column(JSONB, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     health_status: Mapped[str | None] = mapped_column(String(20))

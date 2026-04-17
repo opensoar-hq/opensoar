@@ -12,6 +12,7 @@ class PlaybookResponse(BaseModel):
     name: str
     description: str | None = None
     partner: str | None = None
+    tenant_id: uuid.UUID | None = None
     execution_order: int
     module_path: str
     function_name: str
@@ -27,6 +28,7 @@ class PlaybookResponse(BaseModel):
 class PlaybookUpdate(BaseModel):
     enabled: bool | None = None
     partner: str | None = None
+    tenant_id: uuid.UUID | None = None
 
 
 class PlaybookRunRequest(BaseModel):
