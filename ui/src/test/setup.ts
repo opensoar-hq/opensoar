@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import React from 'react'
 
 // Node 25+ ships a stub `localStorage` on globalThis that lacks the DOM
 // `Storage` interface (no getItem/setItem/clear). jsdom inherits that broken
@@ -73,3 +74,53 @@ if (!window.ResizeObserver) {
 window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
 Element.prototype.scrollTo = vi.fn() as unknown as Element['scrollTo']
 Element.prototype.scrollIntoView = vi.fn() as unknown as Element['scrollIntoView']
+
+// Strip the framer-motion animation props that would otherwise be warned about
+// when forwarded to a plain DOM element.
+const MOTION_PROPS = new Set([
+  'initial',
+  'animate',
+  'exit',
+  'transition',
+  'layout',
+  'layoutId',
+  'variants',
+  'whileHover',
+  'whileTap',
+  'whileFocus',
+  'whileInView',
+  'drag',
+  'dragConstraints',
+])
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function stripMotionProps(props: Record<string, any>): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clean: Record<string, any> = {}
+  for (const key of Object.keys(props)) {
+    if (!MOTION_PROPS.has(key)) clean[key] = props[key]
+  }
+  return clean
+}
+
+// Stub framer-motion so tests don't wait on layout/exit animations.
+vi.mock('framer-motion', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('framer-motion')
+  const makeComponent = (tag: string) =>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    React.forwardRef<unknown, any>((props, ref) =>
+      React.createElement(tag, { ...stripMotionProps(props), ref }),
+    )
+
+  return {
+    ...actual,
+    AnimatePresence: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    motion: new Proxy(
+      {},
+      {
+        get: (_target, tag: string) => makeComponent(tag),
+      },
+    ),
+  }
+})

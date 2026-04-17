@@ -1,53 +1,105 @@
+import { ApiError } from '@/lib/errors'
+
 const BASE = '/api/v1'
+
+type UnauthorizedListener = () => void
+const unauthorizedListeners = new Set<UnauthorizedListener>()
+
+/**
+ * Subscribe to 401 Unauthorized responses bubbling up from any API call.
+ * The AuthProvider wires this to clear the session and redirect to /login
+ * without every caller having to add the same catch.
+ */
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener)
+  return () => { unauthorizedListeners.delete(listener) }
+}
 
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('opensoar_token')
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+async function parseBody(res: Response): Promise<unknown> {
+  const contentType = res.headers.get('content-type') ?? ''
+  if (contentType.includes('application/json')) {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+  try {
+    return await res.text()
+  } catch {
+    return null
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit,
+): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, init)
+  } catch (err) {
+    // Transport-level failure (offline, DNS, CORS, aborted, etc.)
+    const message = err instanceof Error ? err.message : 'Network request failed'
+    throw new ApiError(message, { status: 0, isNetworkError: true })
+  }
+
+  if (!res.ok) {
+    const body = await parseBody(res)
+    const detail =
+      body && typeof body === 'object' && 'detail' in body && typeof (body as { detail: unknown }).detail === 'string'
+        ? (body as { detail: string }).detail
+        : `${res.status} ${res.statusText}`
+    const error = new ApiError(detail, { status: res.status, body })
+    if (res.status === 401) {
+      for (const listener of unauthorizedListeners) {
+        try { listener() } catch { /* ignore */ }
+      }
+    }
+    throw error
+  }
+
+  return (await res.json()) as T
+}
+
 async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
+  return request<T>(path, { headers: authHeaders() })
 }
 
 async function postJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  return request<T>(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
 }
 
 async function deleteJSON(path: string): Promise<{ detail: string }> {
-  const res = await fetch(`${BASE}${path}`, {
+  return request<{ detail: string }>(path, {
     method: 'DELETE',
     headers: authHeaders(),
   })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
 }
 
 async function patchJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  return request<T>(path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
 }
 
 async function putJSON<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  return request<T>(path, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-  return res.json()
 }
 
 // Types

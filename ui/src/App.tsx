@@ -1,8 +1,9 @@
+import { useMemo } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext'
-import { ToastProvider } from '@/components/ui/Toast'
+import { ToastProvider, useToast } from '@/components/ui/Toast'
 import { AppLayout } from '@/layouts/AppLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { AlertsListPage } from '@/pages/AlertsListPage'
@@ -15,12 +16,7 @@ import { IncidentDetailPage } from '@/pages/IncidentDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { Spinner } from '@/components/ui/Spinner'
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1 },
-  },
-})
+import { buildQueryClient } from '@/lib/queryErrors'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { analyst, isLoading } = useAuth()
@@ -58,31 +54,41 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   return children
 }
 
-export default function App() {
+function AppRoutes() {
+  const toast = useToast()
+  // Build the QueryClient once we have toast available — so global query and
+  // mutation errors can surface through the unified toast system.
+  const queryClient = useMemo(() => buildQueryClient({ toast }), [toast])
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <WorkspaceProvider>
-          <ToastProvider>
-            <BrowserRouter>
-              <Routes>
-                <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
-                <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
-                  <Route index element={<DashboardPage />} />
-                  <Route path="alerts" element={<AlertsListPage />} />
-                  <Route path="alerts/:id" element={<AlertDetailPage />} />
-                  <Route path="runs" element={<RunsListPage />} />
-                  <Route path="runs/:id" element={<RunDetailPage />} />
-                  <Route path="incidents" element={<IncidentsListPage />} />
-                  <Route path="incidents/:id" element={<IncidentDetailPage />} />
-                  <Route path="playbooks" element={<PlaybooksListPage />} />
-                  <Route path="settings" element={<SettingsPage />} />
-                </Route>
-              </Routes>
-            </BrowserRouter>
-          </ToastProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<PublicOnly><LoginPage /></PublicOnly>} />
+              <Route element={<RequireAuth><AppLayout /></RequireAuth>}>
+                <Route index element={<DashboardPage />} />
+                <Route path="alerts" element={<AlertsListPage />} />
+                <Route path="alerts/:id" element={<AlertDetailPage />} />
+                <Route path="runs" element={<RunsListPage />} />
+                <Route path="runs/:id" element={<RunDetailPage />} />
+                <Route path="incidents" element={<IncidentsListPage />} />
+                <Route path="incidents/:id" element={<IncidentDetailPage />} />
+                <Route path="playbooks" element={<PlaybooksListPage />} />
+                <Route path="settings" element={<SettingsPage />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
         </WorkspaceProvider>
       </AuthProvider>
     </QueryClientProvider>
+  )
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppRoutes />
+    </ToastProvider>
   )
 }
