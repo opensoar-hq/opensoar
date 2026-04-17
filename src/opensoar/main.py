@@ -13,6 +13,7 @@ from opensoar.middleware.rate_limit import RateLimitMiddleware
 from opensoar.api.ai import router as ai_router
 from opensoar.api.actions import router as actions_router
 from opensoar.api.activities import router as activities_router
+from opensoar.api.admin_retention import router as admin_retention_router
 from opensoar.api.alerts import router as alerts_router
 from opensoar.api.api_keys import router as api_keys_router
 from opensoar.api.auth import router as auth_router
@@ -106,6 +107,7 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(actions_router, prefix="/api/v1")
 app.include_router(api_keys_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(admin_retention_router, prefix="/api/v1")
 
 # ── Prometheus scrape endpoint (no /api/v1 prefix) ──────────────────
 app.include_router(metrics_router)

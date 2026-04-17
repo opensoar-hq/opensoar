@@ -23,3 +23,6 @@ class Incident(Base):
     assigned_username: Mapped[str | None] = mapped_column(String(100))
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )

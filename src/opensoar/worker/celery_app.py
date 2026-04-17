@@ -20,3 +20,8 @@ celery_app.conf.update(
 )
 
 celery_app.autodiscover_tasks(["opensoar.worker"])
+
+# Import task modules that are not auto-discovered by the default Celery
+# conventions (which only discover `tasks.py` per package). These imports also
+# register their Celery beat schedules on module-load.
+import opensoar.worker.retention  # noqa: E402, F401
