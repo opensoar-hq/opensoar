@@ -1,11 +1,29 @@
-OpenSOAR has been installed.
+OpenSOAR has been installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
 
-The chart currently assumes a single release per namespace because the UI image proxies /api requests to the in-cluster Service named "api".
+The chart currently assumes a single release per namespace because the UI image
+proxies /api requests to the in-cluster Service named "api".
 
-To access the UI locally:
+1. Check that the migrate Job and all Deployments rolled out:
 
-  kubectl port-forward svc/ui 3000:{{ .Values.ui.service.port }}
+     kubectl -n {{ .Release.Namespace }} get all
 
-Then open:
+2. Reach the UI from your workstation via port-forward:
 
-  http://127.0.0.1:3000
+     kubectl -n {{ .Release.Namespace }} port-forward svc/ui 3000:{{ .Values.ui.service.port }}
+
+   then open http://127.0.0.1:3000
+{{- if .Values.ui.ingress.enabled }}
+
+   The UI Ingress is enabled on host {{ .Values.ui.ingress.host }} (class "{{ .Values.ui.ingress.className }}").
+{{- end }}
+
+3. Turn on AI features by populating the corresponding secrets in values.yaml
+   or on the CLI (they are optional — pods start without them):
+
+     --set secrets.anthropicApiKey=<your-anthropic-key>
+     --set secrets.openaiApiKey=<your-openai-key>
+     --set secrets.ollamaUrl=http://ollama.ollama.svc.cluster.local:11434
+
+4. Swap out the default Postgres / Redis bundles by setting
+   `postgres.enabled=false` / `redis.enabled=false` and supplying your own
+   DATABASE_URL / REDIS_URL via a pre-created `opensoar-secrets` Secret.

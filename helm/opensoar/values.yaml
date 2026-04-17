@@ -24,10 +24,18 @@ images:
     tag: "7-alpine"
     pullPolicy: IfNotPresent
 
+# Secrets rendered into a single Opaque Secret named `opensoar-secrets`.
+# Swap to your secret manager (SOPS, External Secrets, Sealed Secrets, etc.)
+# for production — these defaults are only safe for local/dev clusters.
 secrets:
   postgresPassword: opensoar
   jwtSecret: change-me
   apiKeySecret: change-me
+  # AI provider credentials. Leave empty strings to skip injection; only keys
+  # with non-empty values are mounted into the api and worker pods.
+  anthropicApiKey: ""
+  openaiApiKey: ""
+  ollamaUrl: ""
 
 api:
   replicaCount: 1

@@ -26,33 +26,9 @@ spec:
             - opensoar.worker.celery_app
             - worker
             - --loglevel=info
-            - --concurrency={{ .Values.worker.concurrency | quote }}
+            - --concurrency={{ .Values.worker.concurrency }}
           env:
-            - name: DATABASE_URL
-              valueFrom:
-                secretKeyRef:
-                  name: opensoar-secrets
-                  key: database-url
-            - name: REDIS_URL
-              valueFrom:
-                secretKeyRef:
-                  name: opensoar-secrets
-                  key: redis-url
-            - name: CELERY_BROKER_URL
-              valueFrom:
-                secretKeyRef:
-                  name: opensoar-secrets
-                  key: celery-broker-url
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: opensoar-secrets
-                  key: jwt-secret
-            - name: API_KEY_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: opensoar-secrets
-                  key: api-key-secret
+{{ include "opensoar.commonEnv" . | indent 12 }}
             - name: PLAYBOOK_DIRS
               value: {{ .Values.worker.playbookDirs | quote }}
 {{- if .Values.worker.extraEnv }}
