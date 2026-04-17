@@ -78,6 +78,33 @@ assert_contains "$DEFAULT" 'name: redis' "redis rendered when enabled"
 # Ingress defaults to disabled.
 assert_not_contains "$DEFAULT" 'kind: Ingress' "ingress disabled by default"
 
+section "pre-install hook ordering"
+# Secret must install before the migrate Job so the Job's secretKeyRefs resolve.
+if grep -F '"helm.sh/hook-weight": "-10"' "$DEFAULT" > /dev/null; then
+  pass "secret annotated as pre-install hook with weight -10"
+else
+  fail "secret missing pre-install hook annotation"
+fi
+# Postgres (Service + StatefulSet) must install before the migrate Job.
+if [ "$(grep -cF '"helm.sh/hook-weight": "-5"' "$DEFAULT")" -ge 2 ]; then
+  pass "postgres Service + StatefulSet annotated as pre-install hooks with weight -5"
+else
+  fail "postgres missing pre-install hook annotations"
+fi
+# Migrate Job runs last in the hook chain.
+if grep -F '"helm.sh/hook-weight": "10"' "$DEFAULT" > /dev/null; then
+  pass "migrate Job annotated with positive hook weight"
+else
+  fail "migrate Job missing positive hook weight"
+fi
+# Migrate Job has a wait-for-postgres initContainer so pre-install tolerates
+# a subchart Postgres that is still coming up.
+if grep -q 'name: wait-for-postgres' "$DEFAULT"; then
+  pass "migrate Job waits for postgres via initContainer"
+else
+  fail "migrate Job missing wait-for-postgres initContainer"
+fi
+
 section "subcharts disabled"
 EXTERN="$TMPDIR/external.yaml"
 helm template opensoar "$CHART_DIR" \
