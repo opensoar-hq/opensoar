@@ -4,3 +4,14 @@ description: Helm chart for self-hosted OpenSOAR deployments
 type: application
 version: 0.1.0
 appVersion: "latest"
+home: https://github.com/opensoar-hq/opensoar-core
+sources:
+  - https://github.com/opensoar-hq/opensoar-core
+keywords:
+  - soar
+  - security
+  - automation
+  - incident-response
+maintainers:
+  - name: OpenSOAR
+    url: https://github.com/opensoar-hq

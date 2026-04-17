@@ -6,7 +6,12 @@ metadata:
 {{ include "opensoar.labels" . | indent 4 }}
     app.kubernetes.io/component: migrate
   annotations:
+    # Runs before api/worker/ui on both install and upgrade. Paired with a
+    # wait-for-postgres initContainer so the Job tolerates a subchart Postgres
+    # that is still starting up as well as an external Postgres that may be
+    # temporarily unreachable.
     "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "10"
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
@@ -17,6 +22,36 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: "{{ .Values.images.migrate.repository }}:{{ .Values.images.migrate.tag }}"
+          imagePullPolicy: {{ .Values.images.migrate.pullPolicy }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: opensoar-secrets
+                  key: database-url
+          command:
+            - python
+            - -c
+            - |
+              import os, socket, sys, time
+              from urllib.parse import urlparse
+              url = urlparse(os.environ["DATABASE_URL"].replace("postgresql+asyncpg", "postgresql"))
+              host = url.hostname or "postgres"
+              port = url.port or 5432
+              deadline = time.time() + 300
+              while time.time() < deadline:
+                  try:
+                      with socket.create_connection((host, port), timeout=3):
+                          print(f"postgres reachable at {host}:{port}")
+                          sys.exit(0)
+                  except OSError as exc:
+                      print(f"waiting for postgres at {host}:{port}: {exc}", flush=True)
+                      time.sleep(3)
+              print("timed out waiting for postgres")
+              sys.exit(1)
       containers:
         - name: migrate
           image: "{{ .Values.images.migrate.repository }}:{{ .Values.images.migrate.tag }}"

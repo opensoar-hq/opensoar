@@ -203,7 +203,69 @@ jobs:
           grep -q 'helm.sh/hook.*pre-install,pre-upgrade' /tmp/opensoar-helm.yaml
           grep -q 'name: API_KEY_SECRET' /tmp/opensoar-helm.yaml
           grep -q 'name: PLAYBOOK_DIRS' /tmp/opensoar-helm.yaml
+          grep -q 'name: ANTHROPIC_API_KEY' /tmp/opensoar-helm.yaml
+          grep -q 'name: OPENAI_API_KEY' /tmp/opensoar-helm.yaml
+          grep -q 'name: OLLAMA_URL' /tmp/opensoar-helm.yaml
           grep -q 'app.kubernetes.io/component: worker' /tmp/opensoar-helm.yaml
+
+      - name: Run chart template assertions script
+        run: bash scripts/test-helm.sh
+
+  helm-install-smoke:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: opensoar-helm
+
+      - name: Build deploy images into the kind cluster
+        run: |
+          docker build . --target api -t ghcr.io/opensoar-hq/opensoar-core-api:ci
+          docker build . --target worker -t ghcr.io/opensoar-hq/opensoar-core-worker:ci
+          docker build . --target migrate -t ghcr.io/opensoar-hq/opensoar-core-migrate:ci
+          docker build . --target ui -t ghcr.io/opensoar-hq/opensoar-core-ui:ci
+          kind load docker-image ghcr.io/opensoar-hq/opensoar-core-api:ci --name opensoar-helm
+          kind load docker-image ghcr.io/opensoar-hq/opensoar-core-worker:ci --name opensoar-helm
+          kind load docker-image ghcr.io/opensoar-hq/opensoar-core-migrate:ci --name opensoar-helm
+          kind load docker-image ghcr.io/opensoar-hq/opensoar-core-ui:ci --name opensoar-helm
+
+      - name: helm install against kind
+        run: |
+          helm install opensoar ./helm/opensoar \
+            --namespace opensoar --create-namespace \
+            --set images.api.tag=ci \
+            --set images.worker.tag=ci \
+            --set images.migrate.tag=ci \
+            --set images.ui.tag=ci \
+            --set images.api.pullPolicy=IfNotPresent \
+            --set images.worker.pullPolicy=IfNotPresent \
+            --set images.migrate.pullPolicy=IfNotPresent \
+            --set images.ui.pullPolicy=IfNotPresent \
+            --set secrets.jwtSecret=ci-jwt-secret-which-is-long-enough-for-hs256 \
+            --set secrets.apiKeySecret=ci-api-key-secret \
+            --set postgres.persistence.size=1Gi \
+            --wait --timeout 6m
+
+      - name: Confirm api rolled out (migrate ran as pre-install hook)
+        run: |
+          kubectl -n opensoar get pods
+          kubectl -n opensoar rollout status deployment/api --timeout=180s
+          kubectl -n opensoar rollout status deployment/worker --timeout=180s
+          kubectl -n opensoar rollout status deployment/ui --timeout=180s
+
+      - name: Dump state on failure
+        if: failure()
+        run: |
+          kubectl -n opensoar get all
+          kubectl -n opensoar describe pods
+          kubectl -n opensoar logs -l app.kubernetes.io/component=migrate --tail=200 || true
+          kubectl -n opensoar logs -l app.kubernetes.io/component=api --tail=200 || true
+          kubectl -n opensoar logs -l app.kubernetes.io/component=worker --tail=200 || true
 
   ui-test:
     runs-on: ubuntu-latest
@@ -235,7 +297,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [test, ui-test, compose-upgrade-smoke, deploy-install-smoke, helm-packaging-smoke]
+    needs: [test, ui-test, compose-upgrade-smoke, deploy-install-smoke, helm-packaging-smoke, helm-install-smoke]
     if: github.event_name == 'push'
     permissions:
       contents: read

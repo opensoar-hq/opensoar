@@ -5,6 +5,12 @@ metadata:
   name: postgres
   labels:
 {{ include "opensoar.labels" . | indent 4 }}
+  annotations:
+    # Provisioned ahead of the migrate Job so alembic has a database to connect
+    # to. Only hooked on pre-install — upgrades leave the running Postgres
+    # resources untouched so data survives chart upgrades.
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
 spec:
   ports:
     - name: postgres
@@ -20,6 +26,9 @@ metadata:
   labels:
 {{ include "opensoar.labels" . | indent 4 }}
     app.kubernetes.io/component: postgres
+  annotations:
+    "helm.sh/hook": pre-install
+    "helm.sh/hook-weight": "-5"
 spec:
   serviceName: postgres
   replicas: 1
