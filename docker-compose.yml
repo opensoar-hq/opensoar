@@ -133,11 +133,47 @@ services:
       redis:
         condition: service_healthy
 
-  worker:
+  # Hot-path worker: consumes latency-sensitive playbook executions.
+  # Scales independently from the low-priority worker so background
+  # enrichment never starves interactive runs.
+  worker-hot:
     build:
       context: .
       target: worker
-    command: celery -A opensoar.worker.celery_app worker --loglevel=info --concurrency=4
+    command: >
+      celery -A opensoar.worker.celery_app worker
+      --loglevel=info
+      --concurrency=${WORKER_HOT_CONCURRENCY:-4}
+      -Q ${WORKER_HOT_QUEUES:-high,default}
+      -n hot@%h
+    environment:
+      DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-test-secret-which-is-long-enough-for-hs256}
+      API_KEY_SECRET: ${API_KEY_SECRET:-test-api-key-secret}
+      PLAYBOOK_DIRS: /app/playbooks
+    volumes:
+      - ./src:/app/src
+      - ./playbooks:/app/playbooks
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Low-priority worker: observable enrichment and other background tasks.
+  worker-low:
+    build:
+      context: .
+      target: worker
+    command: >
+      celery -A opensoar.worker.celery_app worker
+      --loglevel=info
+      --concurrency=${WORKER_LOW_CONCURRENCY:-2}
+      -Q ${WORKER_LOW_QUEUES:-low}
+      -n low@%h
     environment:
       DATABASE_URL: postgresql+asyncpg://opensoar:${POSTGRES_PASSWORD:-opensoar_dev}@postgres:5432/opensoar
       REDIS_URL: redis://redis:6379/0
