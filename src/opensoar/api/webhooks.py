@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opensoar.api.deps import get_db
 from opensoar.auth.api_key import hash_api_key
 from opensoar.ingestion.webhook import process_webhook
+from opensoar.middleware.metrics import record_alert_ingested
 from opensoar.models.api_key import ApiKey
 from opensoar.plugins import dispatch_api_key_validators
 from opensoar.schemas.webhook import WebhookResponse
@@ -118,6 +119,7 @@ async def receive_alert(
     _key: None = Depends(_validate_default_webhook_key),
 ):
     alert = await process_webhook(session, payload, source="webhook")
+    record_alert_ingested("webhook")
 
     from opensoar.main import get_trigger_engine
 
@@ -149,6 +151,7 @@ async def receive_elastic_alert(
     _key: None = Depends(_validate_elastic_webhook_key),
 ):
     alert = await process_webhook(session, payload, source="elastic")
+    record_alert_ingested("elastic")
 
     from opensoar.main import get_trigger_engine
 
