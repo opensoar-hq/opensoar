@@ -54,6 +54,16 @@ class AnalystRoleResponse(BaseModel):
     label: str
 
 
+class MentionableAnalyst(BaseModel):
+    """Minimal analyst projection used by the comment mention autocomplete."""
+
+    id: uuid.UUID
+    username: str
+    display_name: str
+
+    model_config = {"from_attributes": True}
+
+
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str

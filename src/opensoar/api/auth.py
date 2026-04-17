@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import create_access_token, require_analyst
 from opensoar.auth.rbac import VALID_ANALYST_ROLES
 from opensoar.models.analyst import Analyst
-from opensoar.plugins import dispatch_audit_event, get_analyst_roles, get_auth_capabilities
+from opensoar.plugins import (
+    dispatch_audit_event,
+    enforce_tenant_access,
+    get_analyst_roles,
+    get_auth_capabilities,
+)
 from opensoar.schemas.audit import AuditEvent
 from opensoar.schemas.auth import AuthCapabilitiesResponse
 from opensoar.schemas.analyst import (
@@ -19,6 +24,7 @@ from opensoar.schemas.analyst import (
     AnalystRoleResponse,
     AnalystResponse,
     AnalystUpdate,
+    MentionableAnalyst,
     PasswordChangeRequest,
     PasswordResetRequest,
     TokenResponse,
@@ -268,6 +274,55 @@ async def list_analysts(
 ):
     result = await session.execute(select(Analyst).order_by(Analyst.username))
     return [AnalystResponse.model_validate(a) for a in result.scalars().all()]
+
+
+@router.get("/analysts/mentionable", response_model=list[MentionableAnalyst])
+async def list_mentionable_analysts(
+    request: Request,
+    q: str | None = Query(default=None, max_length=100),
+    limit: int = Query(default=10, ge=1, le=50),
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_analyst),
+):
+    """Return analysts the caller may ``@mention`` in a comment.
+
+    Results are scoped to active analysts in the caller's tenant — any
+    registered ``tenant_access_validators`` plugin decides what "tenant" means.
+    Optional ``q`` is a case-insensitive prefix filter on ``username`` or
+    ``display_name`` for the autocomplete dropdown.
+    """
+    query = (
+        select(Analyst)
+        .where(Analyst.is_active.is_(True))
+        .order_by(Analyst.username)
+    )
+    if q:
+        pattern = f"{q.lower()}%"
+        query = query.where(
+            func.lower(Analyst.username).like(pattern)
+            | func.lower(Analyst.display_name).like(pattern)
+        )
+    # Fetch a small over-size, filter through the tenant hook, then truncate.
+    rows = (await session.execute(query.limit(limit * 4))).scalars().all()
+
+    visible: list[Analyst] = []
+    for candidate in rows:
+        try:
+            await enforce_tenant_access(
+                request.app,
+                resource=candidate,
+                resource_type="analyst",
+                action="mention",
+                analyst=analyst,
+                request=request,
+                session=session,
+            )
+        except HTTPException:
+            continue
+        visible.append(candidate)
+        if len(visible) >= limit:
+            break
+    return [MentionableAnalyst.model_validate(a) for a in visible]
 
 
 @router.patch("/analysts/{analyst_id}", response_model=AnalystResponse)

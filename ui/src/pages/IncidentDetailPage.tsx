@@ -6,6 +6,8 @@ import { api, type Alert, type Analyst, type Observable, type TimelineEvent, typ
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
+import { MentionComposer } from '@/components/mentions/MentionComposer'
+import { MentionText } from '@/components/mentions/MentionText'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card'
 import { Select } from '@/components/ui/Select'
 import { Table, TableHeader, TableBody, TableHead, TableCell, TableHeaderRow } from '@/components/ui/Table'
@@ -114,15 +116,10 @@ function IncidentTimelineEntry({
 
         {isComment && editing ? (
           <div className="mt-1 space-y-1.5">
-            <Input
-              type="text"
+            <MentionComposer
               value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && editText.trim()) editMutation.mutate(editText.trim())
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="!text-xs"
+              onChange={setEditText}
+              onSubmit={() => editText.trim() && editMutation.mutate(editText.trim())}
               autoFocus
             />
             <div className="flex gap-1">
@@ -136,7 +133,9 @@ function IncidentTimelineEntry({
           </div>
         ) : isComment && activity.detail ? (
           <div className="group/comment bg-surface-hover/50 px-3 py-2 rounded-md mt-1 relative">
-            <div className="text-text">{activity.detail}</div>
+            <div className="text-text">
+              <MentionText text={activity.detail} mentions={activity.mentions} />
+            </div>
             {isOwnComment && (
               <button
                 onClick={() => { setEditText(activity.detail || ''); setEditing(true) }}
@@ -527,15 +526,12 @@ export function IncidentDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="flex gap-2 mb-4">
-                <Input
-                  type="text"
-                  placeholder="Add a comment..."
+                <MentionComposer
                   value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && commentText.trim()) commentMutation.mutate(commentText.trim())
-                  }}
-                  className="flex-1 text-sm"
+                  onChange={setCommentText}
+                  onSubmit={() => commentMutation.mutate(commentText.trim())}
+                  placeholder="Add a comment... Use @ to mention an analyst."
+                  className="flex-1"
                 />
                 <Button
                   size="sm"
