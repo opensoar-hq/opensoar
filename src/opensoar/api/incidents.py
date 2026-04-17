@@ -10,6 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
 from opensoar.auth.rbac import Permission, require_permission
+from opensoar.comments.mentions import parse_mention_tokens
+from opensoar.comments.resolver import ResolvedMention, resolve_mentions
+from opensoar.notifications import MentionNotification, dispatch_mention_notifications
 from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
@@ -679,16 +682,27 @@ async def add_incident_comment(
         session=session,
     )
 
+    resolved = await _resolve_incident_comment_mentions(
+        request=request, session=session, analyst=analyst, text=body.text
+    )
     activity = Activity(
         incident_id=incident_id,
         analyst_id=analyst.id,
         analyst_username=analyst.username,
         action="comment",
         detail=body.text,
+        mentions=[m.username for m in resolved],
     )
     session.add(activity)
     await session.commit()
     await session.refresh(activity)
+    await _notify_incident_mentions(
+        actor=analyst,
+        mentions=resolved,
+        resource_id=incident_id,
+        comment_id=activity.id,
+        text=body.text,
+    )
     return ActivityResponse.model_validate(activity)
 
 
@@ -740,6 +754,66 @@ async def edit_incident_comment(
     activity.metadata_json = {**(activity.metadata_json or {}), "edit_history": history}
     activity.detail = body.text
 
+    resolved = await _resolve_incident_comment_mentions(
+        request=request, session=session, analyst=analyst, text=body.text
+    )
+    previously_notified = set(activity.mentions or [])
+    activity.mentions = [m.username for m in resolved]
+
     await session.commit()
     await session.refresh(activity)
+
+    new_mentions = [m for m in resolved if m.username not in previously_notified]
+    await _notify_incident_mentions(
+        actor=analyst,
+        mentions=new_mentions,
+        resource_id=incident_id,
+        comment_id=activity.id,
+        text=body.text,
+    )
     return ActivityResponse.model_validate(activity)
+
+
+async def _resolve_incident_comment_mentions(
+    *,
+    request: Request,
+    session: AsyncSession,
+    analyst: Analyst,
+    text: str,
+) -> list[ResolvedMention]:
+    tokens = parse_mention_tokens(text)
+    if not tokens:
+        return []
+    return await resolve_mentions(
+        app=request.app,
+        session=session,
+        usernames=tokens,
+        analyst=analyst,
+        request=request,
+    )
+
+
+async def _notify_incident_mentions(
+    *,
+    actor: Analyst,
+    mentions: list[ResolvedMention],
+    resource_id: uuid.UUID,
+    comment_id: uuid.UUID,
+    text: str,
+) -> None:
+    if not mentions:
+        return
+    await dispatch_mention_notifications(
+        [
+            MentionNotification(
+                recipient_username=m.username,
+                recipient_id=m.analyst_id,
+                actor_username=actor.username,
+                resource_type="incident",
+                resource_id=str(resource_id),
+                comment_id=str(comment_id),
+                comment_text=text,
+            )
+            for m in mentions
+        ]
+    )

@@ -29,3 +29,4 @@ class Activity(Base):
     detail: Mapped[str | None] = mapped_column(Text)
     metadata_json: Mapped[dict | None] = mapped_column(JSONB)
     analyst_username: Mapped[str | None] = mapped_column(String(100))
+    mentions: Mapped[list[str] | None] = mapped_column(JSONB)

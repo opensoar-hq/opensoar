@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class ActivityResponse(BaseModel):
@@ -16,10 +16,18 @@ class ActivityResponse(BaseModel):
     action: str
     detail: str | None = None
     metadata_json: dict[str, Any] | None = None
+    mentions: list[str] = []
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_validator("mentions", mode="before")
+    @classmethod
+    def _coerce_mentions(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        return value
 
 
 class ActivityList(BaseModel):

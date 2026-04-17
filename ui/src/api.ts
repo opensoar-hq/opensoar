@@ -200,8 +200,15 @@ export interface Activity {
   action: string
   detail: string | null
   metadata_json: Record<string, unknown> | null
+  mentions: string[]
   created_at: string
   updated_at: string
+}
+
+export interface MentionableAnalyst {
+  id: string
+  username: string
+  display_name: string
 }
 
 export interface ActivityList {
@@ -377,6 +384,14 @@ export const api = {
     roles: () => fetchJSON<AnalystRole[]>('/auth/roles'),
     changePassword: (data: { current_password: string; new_password: string }) =>
       postJSON<{ detail: string }>('/auth/change-password', data),
+    mentionable: (q?: string) => {
+      const sp = new URLSearchParams()
+      if (q) sp.set('q', q)
+      const qs = sp.toString()
+      return fetchJSON<MentionableAnalyst[]>(
+        `/auth/analysts/mentionable${qs ? `?${qs}` : ''}`,
+      )
+    },
   },
   webhooks: {
     createAlert: (payload: Record<string, unknown>) =>
