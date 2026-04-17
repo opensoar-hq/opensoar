@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst, require_analyst
-from opensoar.auth.rbac import Permission, has_permission
+from opensoar.auth.rbac import Permission, has_permission, require_permission
 from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
@@ -322,7 +322,7 @@ async def update_alert(
     update: AlertUpdate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.ALERTS_UPDATE)),
 ):
     result = await session.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
@@ -436,7 +436,7 @@ async def claim_alert(
     alert_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.ALERTS_UPDATE)),
 ):
     """Claim an alert for the current analyst."""
     result = await session.execute(select(Alert).where(Alert.id == alert_id))
@@ -453,18 +453,15 @@ async def claim_alert(
         session=session,
     )
 
-    if analyst:
-        alert.assigned_to = analyst.id
-        alert.assigned_username = analyst.username
-        session.add(Activity(
-            alert_id=alert_id,
-            analyst_id=analyst.id,
-            analyst_username=analyst.username,
-            action="claimed",
-            detail=f"Claimed by {analyst.display_name}",
-        ))
-    else:
-        raise HTTPException(status_code=401, detail="Authentication required to claim alerts")
+    alert.assigned_to = analyst.id
+    alert.assigned_username = analyst.username
+    session.add(Activity(
+        alert_id=alert_id,
+        analyst_id=analyst.id,
+        analyst_username=analyst.username,
+        action="claimed",
+        detail=f"Claimed by {analyst.display_name}",
+    ))
 
     if alert.status == "new":
         alert.status = "in_progress"
@@ -486,7 +483,7 @@ async def claim_alert(
 async def bulk_update_alerts(
     body: BulkAlertUpdate,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst = Depends(require_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.ALERTS_UPDATE)),
 ):
     """Apply a bulk operation to multiple alerts."""
     updated = 0
@@ -574,12 +571,24 @@ async def bulk_update_alerts(
 @router.delete("/{alert_id}")
 async def delete_alert(
     alert_id: uuid.UUID,
+    request: Request,
     session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.ALERTS_DELETE)),
 ):
     result = await session.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="delete",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     await session.delete(alert)
     await session.commit()

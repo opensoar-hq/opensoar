@@ -72,6 +72,20 @@ class TestIncidentCRUD:
         assert resp.json()["severity"] == "critical"
         assert resp.json()["status"] == "investigating"
 
+    async def test_update_incident_requires_auth(self, client, registered_analyst):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Needs Auth", "severity": "low"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+
+        resp = await client.patch(
+            f"/api/v1/incidents/{incident_id}",
+            json={"severity": "critical"},
+        )
+        assert resp.status_code == 401
+
     async def test_close_incident(self, client, registered_analyst):
         resp = await client.post(
             "/api/v1/incidents",
@@ -111,6 +125,21 @@ class TestIncidentAlertLinking:
         # Verify alert count
         resp = await client.get(f"/api/v1/incidents/{incident_id}")
         assert resp.json()["alert_count"] >= 1
+
+    async def test_link_alert_requires_auth(self, client, registered_analyst, sample_alert_via_api):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Link Auth", "severity": "high"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+        alert_id = sample_alert_via_api["alert_id"]
+
+        resp = await client.post(
+            f"/api/v1/incidents/{incident_id}/alerts",
+            json={"alert_id": str(alert_id)},
+        )
+        assert resp.status_code == 401
 
     async def test_list_incident_alerts(self, client, registered_analyst, sample_alert_via_api):
         resp = await client.post(
@@ -152,6 +181,26 @@ class TestIncidentAlertLinking:
             headers=registered_analyst["headers"],
         )
         assert resp.status_code == 200
+
+    async def test_unlink_alert_requires_auth(self, client, registered_analyst, sample_alert_via_api):
+        create = await client.post(
+            "/api/v1/incidents",
+            json={"title": "Unlink Auth", "severity": "low"},
+            headers=registered_analyst["headers"],
+        )
+        incident_id = create.json()["id"]
+        alert_id = sample_alert_via_api["alert_id"]
+
+        await client.post(
+            f"/api/v1/incidents/{incident_id}/alerts",
+            json={"alert_id": str(alert_id)},
+            headers=registered_analyst["headers"],
+        )
+
+        resp = await client.delete(
+            f"/api/v1/incidents/{incident_id}/alerts/{alert_id}",
+        )
+        assert resp.status_code == 401
 
 
 class TestIncidentFiltering:

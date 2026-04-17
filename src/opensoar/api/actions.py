@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
-from opensoar.auth.jwt import get_current_analyst
+from opensoar.auth.jwt import require_analyst
 from opensoar.models.activity import Activity
 from opensoar.models.analyst import Analyst
 from opensoar.schemas.action import (
@@ -60,7 +60,7 @@ async def list_available_actions(ioc_type: str | None = None):
 async def execute_action(
     body: ActionExecuteRequest,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_analyst),
 ):
     action = next((a for a in AVAILABLE_ACTIONS if a.name == body.action_name), None)
     if not action:
@@ -86,8 +86,8 @@ async def execute_action(
     if body.alert_id:
         activity = Activity(
             alert_id=uuid.UUID(body.alert_id),
-            analyst_id=analyst.id if analyst else None,
-            analyst_username=analyst.username if analyst else None,
+            analyst_id=analyst.id,
+            analyst_username=analyst.username,
             action="manual_action",
             detail=f"Executed {body.action_name} on {body.ioc_type}: {body.ioc_value}",
             metadata_json={

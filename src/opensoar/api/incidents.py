@@ -247,7 +247,7 @@ async def update_incident(
     update: IncidentUpdate,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     result = await session.execute(
         select(Incident).where(Incident.id == incident_id)
@@ -353,7 +353,7 @@ async def link_alert(
     body: LinkAlertRequest,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     # Verify incident exists
     result = await session.execute(
@@ -463,7 +463,7 @@ async def unlink_alert(
     alert_id: uuid.UUID,
     request: Request,
     session: AsyncSession = Depends(get_db),
-    analyst: Analyst | None = Depends(get_current_analyst),
+    analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_UPDATE)),
 ):
     result = await session.execute(
         select(IncidentAlert).where(
