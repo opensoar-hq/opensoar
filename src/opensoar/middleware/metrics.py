@@ -48,6 +48,14 @@ playbook_run_duration_seconds: Histogram = Histogram(
     registry=registry,
 )
 
+enrichment_cache_skips_total: Counter = Counter(
+    "opensoar_enrichment_cache_skips_total",
+    "Observable enrichments skipped because every configured source had a "
+    "fresh TTL cache hit.",
+    ("type",),
+    registry=registry,
+)
+
 
 def reset_metrics() -> None:
     """Clear collected samples from every OpenSOAR metric.
@@ -59,6 +67,7 @@ def reset_metrics() -> None:
         alerts_ingested_total,
         playbook_runs_total,
         playbook_run_duration_seconds,
+        enrichment_cache_skips_total,
     ):
         # prometheus_client exposes ``_metrics`` as the labelled-child store.
         metric._metrics.clear()  # noqa: SLF001 — intentional reset for tests
@@ -78,6 +87,13 @@ def record_playbook_run(playbook_name: str, status: str, duration_seconds: float
     """Record a completed playbook run (counter + histogram)."""
     playbook_runs_total.labels(playbook=playbook_name, status=status).inc()
     playbook_run_duration_seconds.labels(playbook=playbook_name).observe(duration_seconds)
+
+
+def record_enrichment_cache_skip(observable_type: str) -> None:
+    """Increment the counter for enrichment enqueues skipped due to a fresh
+    TTL cache hit across every configured source for ``observable_type``.
+    """
+    enrichment_cache_skips_total.labels(type=observable_type).inc()
 
 
 def render_metrics() -> bytes:

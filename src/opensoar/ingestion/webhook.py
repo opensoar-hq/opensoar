@@ -16,7 +16,7 @@ async def _auto_enrich(session: AsyncSession, alert: Alert) -> None:
 
     Every failure is swallowed: enrichment is a best-effort, fire-and-forget
     side effect of ingest and must never block alert creation (issue #66).
-    The TTL-cache hook for issue #67 lives inside
+    The TTL cache hook (issue #67 / #89) lives inside
     ``opensoar.worker.enrichment.should_enrich``.
     """
     try:
@@ -27,7 +27,9 @@ async def _auto_enrich(session: AsyncSession, alert: Alert) -> None:
         new_rows = await enrichment_mod.materialise_observables_for_alert(
             session, alert
         )
-        enrichment_mod.schedule_enrichment_for_alert(alert, new_rows)
+        await enrichment_mod.schedule_enrichment_for_alert(
+            session, alert, new_rows
+        )
     except Exception:
         logger.exception(
             "Auto-enrichment failed for alert %s; ingest continuing", alert.id

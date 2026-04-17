@@ -2,14 +2,15 @@
 
 When an alert is ingested, each newly extracted observable (IP / domain /
 hash / URL) gets a fire-and-forget Celery task that dispatches to the
-configured enrichment integrations (VirusTotal, AbuseIPDB). Results are
-appended to ``Observable.enrichments`` and the ``enrichment_status``
-transitions ``pending -> complete`` (or ``failed``).
+configured enrichment integrations (VirusTotal, AbuseIPDB, GreyNoise).
+Results are appended to ``Observable.enrichments`` and the
+``enrichment_status`` transitions ``pending -> complete`` (or ``failed``).
 
 This module is intentionally decoupled from the rest of the ingest path:
 
-- ``should_enrich(observable)`` is the integration hook where issue #67's
-  TTL cache will slot in (today it always returns True).
+- ``should_enrich(session, observable, partner)`` consults the TTL
+  enrichment cache (issue #67) and returns ``False`` only when every
+  configured source for the observable's type has a fresh cache hit.
 - ``enqueue_enrichment`` is the single call-site the ingest path uses; it
   swallows all errors so enrichment problems never block alert creation.
 - ``_dispatch_enrichments`` is the pure-async worker body; it is mocked in
@@ -40,7 +41,8 @@ logger = logging.getLogger(__name__)
 # observable from being enriched twice while a previous task is still running
 # (or has just completed). Redis is used in production; in tests and when
 # Redis is unavailable we fall back to an in-memory dict so enqueue never
-# errors. The TTL is deliberately short — longer caching is issue #67's job.
+# errors. The TTL is deliberately short — longer caching lives in the
+# integration-level TTL cache (issue #67, wired in via ``should_enrich``).
 
 INFLIGHT_TTL_SECONDS = 300  # 5 minutes
 
@@ -114,35 +116,138 @@ def reset_inflight_tracker() -> None:
         pass
 
 
-# ── Public hook for issue #67 ────────────────────────────────────────────────
+# ── Source → observable-type capability map ─────────────────────────────────
+#
+# When ``should_enrich`` consults the TTL cache it has to know which configured
+# integrations would actually run for this observable's type. VirusTotal covers
+# IPs, domains, hashes and URLs; AbuseIPDB and GreyNoise are IP-only. Sources
+# not listed here are ignored by the cache-freshness check (they never affect
+# the skip decision).
+_SOURCE_TYPE_CAPABILITIES: dict[str, frozenset[str]] = {
+    "virustotal": frozenset({"ip", "domain", "hash", "url"}),
+    "abuseipdb": frozenset({"ip"}),
+    "greynoise": frozenset({"ip"}),
+}
+
+_CACHE_AWARE_SOURCES: tuple[str, ...] = tuple(_SOURCE_TYPE_CAPABILITIES.keys())
 
 
-def should_enrich(observable: Observable) -> bool:
+async def _configured_sources_for(
+    session: AsyncSession, obs_type: str, partner: str | None
+) -> list[str]:
+    """Return the integration types that are enabled for ``partner`` and that
+    handle observable type ``obs_type``. Tenant-agnostic rows (partner IS NULL)
+    are always included.
+    """
+    query = select(IntegrationInstance.integration_type).where(
+        IntegrationInstance.enabled.is_(True),
+        IntegrationInstance.integration_type.in_(_CACHE_AWARE_SOURCES),
+    )
+    if partner is not None:
+        query = query.where(
+            (IntegrationInstance.partner == partner)
+            | (IntegrationInstance.partner.is_(None))
+        )
+    else:
+        query = query.where(IntegrationInstance.partner.is_(None))
+
+    rows = (await session.execute(query)).scalars().all()
+    # Deduplicate while filtering by type capability.
+    sources: list[str] = []
+    seen: set[str] = set()
+    for source in rows:
+        if source in seen:
+            continue
+        if obs_type not in _SOURCE_TYPE_CAPABILITIES.get(source, frozenset()):
+            continue
+        seen.add(source)
+        sources.append(source)
+    return sources
+
+
+# ── Public hook: consults the TTL cache (issue #89) ─────────────────────────
+
+
+async def should_enrich(
+    session: AsyncSession,
+    observable: Observable,
+    partner: str | None = None,
+) -> bool:
     """Decide whether ``observable`` should be enriched now.
 
-    Today this always returns ``True``. Issue #67 will plug a TTL cache in
-    here (returning ``False`` when a fresh enrichment already exists for the
-    same ``(type, value)``). Keep the signature stable.
+    Returns ``False`` only when every configured enrichment source that can
+    handle this observable's type already has a fresh entry in the TTL cache.
+    Partial freshness, stale entries or missing entries all return ``True``
+    (enqueue). When no source is configured for the observable's type there
+    is nothing to cache-skip, so this also returns ``True``.
     """
-    return True
+    try:
+        sources = await _configured_sources_for(
+            session, observable.type, partner
+        )
+    except Exception:  # pragma: no cover - defensive
+        logger.exception(
+            "should_enrich: failed to query configured sources; defaulting to enqueue"
+        )
+        return True
+
+    if not sources:
+        # No configured source can cover this observable — nothing to skip.
+        return True
+
+    from opensoar.integrations.cache import get_default_cache
+
+    try:
+        cache = get_default_cache()
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("should_enrich: cache unavailable; defaulting to enqueue")
+        return True
+
+    for source in sources:
+        try:
+            cached = await cache.get(source, observable.type, observable.value)
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "should_enrich: cache lookup failed for %s:%s:%s; enqueue",
+                source,
+                observable.type,
+                observable.value,
+            )
+            return True
+        if cached is None:
+            # Missing or expired entry => must enqueue.
+            return True
+
+    # Every configured source had a fresh hit — safe to skip.
+    return False
 
 
 # ── Enqueue ──────────────────────────────────────────────────────────────────
 
 
-def enqueue_enrichment(observable: Observable, partner: str | None = None) -> bool:
+async def enqueue_enrichment(
+    session: AsyncSession,
+    observable: Observable,
+    partner: str | None = None,
+) -> bool:
     """Fire-and-forget dispatch of an enrichment task for ``observable``.
 
-    Returns True if a task was enqueued, False if it was suppressed (dedup or
-    hook returned False) or if the broker call failed. *Never* raises —
-    enrichment failures must never block alert ingest.
+    Returns True if a task was enqueued, False if it was suppressed (dedup,
+    cache-fresh across every configured source, or a broker failure). *Never*
+    raises — enrichment failures must never block alert ingest.
     """
-    if not should_enrich(observable):
+    if not await should_enrich(session, observable, partner):
         logger.debug(
-            "should_enrich hook declined enrichment for %s:%s",
+            "TTL cache satisfied; skipping enrichment for %s:%s",
             observable.type,
             observable.value,
         )
+        try:
+            from opensoar.middleware.metrics import record_enrichment_cache_skip
+
+            record_enrichment_cache_skip(observable.type)
+        except Exception:  # pragma: no cover - metrics must never break ingest
+            logger.exception("Failed to record enrichment cache skip metric")
         return False
 
     if not _mark_inflight(observable.type, observable.value, partner):
@@ -460,14 +565,16 @@ async def materialise_observables_for_alert(
     return new_rows
 
 
-def schedule_enrichment_for_alert(alert, observables: list[Observable]) -> None:
+async def schedule_enrichment_for_alert(
+    session: AsyncSession, alert, observables: list[Observable]
+) -> None:
     """Enqueue an enrichment task for each newly created observable.
 
     Swallows every exception so enrichment problems never block ingest.
     """
     for obs in observables:
         try:
-            enqueue_enrichment(obs, partner=alert.partner)
+            await enqueue_enrichment(session, obs, partner=alert.partner)
         except Exception:  # pragma: no cover - defensive
             logger.exception(
                 "Unexpected error while scheduling enrichment for %s", obs.id

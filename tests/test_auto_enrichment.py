@@ -151,12 +151,18 @@ class TestDuplicateDispatchSuppression:
             f"Expected one dispatch for (ip, 10.200.200.200); got {calls}"
         )
 
-    async def test_should_enrich_hook_defaults_true(self):
-        """The ``should_enrich`` hook is the integration point for issue #67's
-        TTL cache. Today it must default to True so every new observable is
-        enriched.
+    async def test_should_enrich_hook_defaults_true(
+        self, session: AsyncSession
+    ):
+        """Without any configured integrations or cache entries the hook must
+        return True so every new observable gets enriched. Issue #89 wires the
+        TTL cache in — with nothing configured, there is nothing to skip.
         """
+        from opensoar.integrations import cache as cache_mod
         from opensoar.worker import enrichment
+
+        # Isolate the cache singleton so other tests do not bleed fresh hits in.
+        cache_mod.reset_default_cache()
 
         class _Stub:
             type = "ip"
@@ -164,7 +170,7 @@ class TestDuplicateDispatchSuppression:
             enrichments = None
             enrichment_status = "pending"
 
-        assert enrichment.should_enrich(_Stub()) is True
+        assert await enrichment.should_enrich(session, _Stub()) is True
 
 
 # ── (b) task writes enrichment + flips status ────────────────────────────────
