@@ -209,6 +209,29 @@ export interface ActivityList {
   total: number
 }
 
+export type TimelineEventSource = 'incident' | 'alert'
+
+export interface TimelineEvent {
+  id: string
+  source: TimelineEventSource
+  action: string
+  detail: string | null
+  created_at: string
+  updated_at: string
+  analyst_id: string | null
+  analyst_username: string | null
+  alert_id: string | null
+  incident_id: string | null
+  metadata_json: Record<string, unknown> | null
+}
+
+export interface TimelineList {
+  events: TimelineEvent[]
+  total: number
+}
+
+export type TimelineFilter = 'all' | 'alert' | 'incident' | 'comment'
+
 export interface AvailableAction {
   name: string
   integration: string
@@ -496,6 +519,14 @@ export const api = {
       patchJSON<Incident2>(`/incidents/${id}`, data),
     alerts: (id: string) => fetchJSON<Alert[]>(`/incidents/${id}/alerts`),
     activities: (id: string) => fetchJSON<ActivityList>(`/incidents/${id}/activities`),
+    timeline: (id: string, params?: { event_type?: TimelineFilter; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams()
+      if (params?.event_type && params.event_type !== 'all') qs.set('event_type', params.event_type)
+      if (params?.limit) qs.set('limit', String(params.limit))
+      if (params?.offset) qs.set('offset', String(params.offset))
+      const q = qs.toString()
+      return fetchJSON<TimelineList>(`/incidents/${id}/timeline${q ? `?${q}` : ''}`)
+    },
     addComment: (id: string, text: string) =>
       postJSON<Activity>(`/incidents/${id}/comments`, { text }),
     editComment: (id: string, commentId: string, text: string) =>

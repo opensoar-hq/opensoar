@@ -33,3 +33,30 @@ class CommentCreate(BaseModel):
 
 class CommentUpdate(BaseModel):
     text: str
+
+
+class TimelineEvent(BaseModel):
+    """A single entry in an aggregated incident timeline.
+
+    `source` distinguishes whether the event came from an alert activity or an
+    incident activity so the UI can render per-source filters and badges.
+    """
+
+    id: uuid.UUID
+    source: str  # "incident" | "alert"
+    action: str
+    detail: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    analyst_id: uuid.UUID | None = None
+    analyst_username: str | None = None
+    alert_id: uuid.UUID | None = None
+    incident_id: uuid.UUID | None = None
+    metadata_json: dict[str, Any] | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TimelineList(BaseModel):
+    events: list[TimelineEvent]
+    total: int
