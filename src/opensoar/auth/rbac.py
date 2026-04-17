@@ -40,6 +40,7 @@ class Permission(StrEnum):
     ANALYSTS_MANAGE = "analysts:manage"
     API_KEYS_MANAGE = "api_keys:manage"
     SETTINGS_MANAGE = "settings:manage"
+    RETENTION_MANAGE = "retention:manage"
 
 
 CORE_ANALYST_ROLE_LABELS: dict[str, str] = {

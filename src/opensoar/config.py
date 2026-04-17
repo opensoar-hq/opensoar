@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     enrichment_cache_ttl_greynoise: int = 6 * 3600
     enrichment_cache_ttl_shodan: int = 24 * 3600
 
+    # Data retention (days). Resolved alerts / closed incidents older than these
+    # thresholds are soft-deleted (archived_at set), then hard-deleted after the
+    # configurable grace period.
+    alerts_retention_days: int = 365
+    incidents_retention_days: int = 730
+    activities_retention_days: int = 365
+    retention_grace_days: int = 30
+
     @property
     def playbook_directories(self) -> list[str]:
         return [d.strip() for d in self.playbook_dirs.split(",") if d.strip()]

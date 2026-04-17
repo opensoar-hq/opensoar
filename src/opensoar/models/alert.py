@@ -34,3 +34,6 @@ class Alert(Base):
     )
     assigned_username: Mapped[str | None] = mapped_column(String(100))
     duplicate_count: Mapped[int] = mapped_column(default=1, server_default="1")
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True
+    )
