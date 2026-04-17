@@ -769,6 +769,7 @@ async def list_incident_timeline(
                 alert_id=activity.alert_id,
                 incident_id=activity.incident_id,
                 metadata_json=activity.metadata_json,
+                mentions=list(activity.mentions or []),
             )
         )
 

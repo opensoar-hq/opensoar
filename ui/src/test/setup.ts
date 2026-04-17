@@ -106,11 +106,18 @@ function stripMotionProps(props: Record<string, any>): Record<string, any> {
 // Stub framer-motion so tests don't wait on layout/exit animations.
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual<Record<string, unknown>>('framer-motion')
-  const makeComponent = (tag: string) =>
+  const componentCache = new Map<string, React.ComponentType<unknown>>()
+  const makeComponent = (tag: string) => {
+    const cached = componentCache.get(tag)
+    if (cached) return cached
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    React.forwardRef<unknown, any>((props, ref) =>
+    const Component = React.forwardRef<unknown, any>((props, ref) =>
       React.createElement(tag, { ...stripMotionProps(props), ref }),
     )
+    Component.displayName = `motion.${tag}`
+    componentCache.set(tag, Component as unknown as React.ComponentType<unknown>)
+    return Component
+  }
 
   return {
     ...actual,
