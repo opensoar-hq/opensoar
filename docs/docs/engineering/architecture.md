@@ -785,6 +785,53 @@ erDiagram
 
 ---
 
+## 9. Observability
+
+### Prometheus Metrics
+
+OpenSOAR exposes a Prometheus scrape endpoint at `GET /metrics` (no `/api/v1`
+prefix, no auth, not rate-limited). The endpoint returns the standard
+Prometheus text exposition format and is safe to scrape at any interval.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `opensoar_http_requests_total` | Counter | `method`, `path`, `status` | Every HTTP request handled by the API (the `/metrics` scrape itself is excluded). |
+| `opensoar_alerts_ingested_total` | Counter | `source` | Incremented on every webhook alert ingest; `source` is `webhook` or `elastic`. |
+| `opensoar_playbook_runs_total` | Counter | `playbook`, `status` | Incremented when a playbook run reaches a terminal state (`success`, `failed`, `cancelled`). |
+| `opensoar_playbook_run_duration_seconds` | Histogram | `playbook` | Duration of each playbook run, recorded by `PlaybookExecutor` when the run completes. |
+
+HTTP request recording is handled by `MetricsMiddleware`
+(`src/opensoar/middleware/metrics.py`). Alert and playbook metrics are emitted
+from the webhook handler and the playbook executor respectively.
+
+```mermaid
+flowchart LR
+    req["HTTP request"] --> mw["MetricsMiddleware"]
+    mw --> handler["Route handler"]
+    handler --> resp["Response"]
+    mw --> http_counter["opensoar_http_requests_total"]
+
+    webhook["Webhook /alerts"] --> alerts_counter["opensoar_alerts_ingested_total"]
+    executor["PlaybookExecutor.execute()"] --> runs_counter["opensoar_playbook_runs_total"]
+    executor --> runs_hist["opensoar_playbook_run_duration_seconds"]
+
+    scrape["Prometheus server"] -->|GET /metrics| endpoint["/metrics endpoint"]
+    endpoint --> registry["CollectorRegistry<br/>(render_metrics)"]
+    http_counter & alerts_counter & runs_counter & runs_hist --> registry
+```
+
+Sample Prometheus scrape config:
+
+```yaml
+scrape_configs:
+  - job_name: opensoar
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["opensoar-api:8000"]
+```
+
+---
+
 ## Tech Stack
 
 | Layer | Technology | Why |

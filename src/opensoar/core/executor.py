@@ -14,6 +14,7 @@ from opensoar.core.decorators import (
     RegisteredPlaybook,
     set_execution_context,
 )
+from opensoar.middleware.metrics import record_playbook_run
 from opensoar.models.action_result import ActionResult
 from opensoar.models.alert import Alert
 from opensoar.models.playbook import PlaybookDefinition
@@ -109,5 +110,13 @@ class PlaybookExecutor:
             set_execution_context(None)
             run.finished_at = datetime.now(timezone.utc)
             await self.session.commit()
+
+            started = run.started_at or run.finished_at
+            duration = (run.finished_at - started).total_seconds()
+            record_playbook_run(
+                playbook_name=playbook.meta.name,
+                status=run.status,
+                duration_seconds=max(duration, 0.0),
+            )
 
         return run

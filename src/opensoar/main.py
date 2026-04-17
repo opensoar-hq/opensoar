@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
+from opensoar.middleware.metrics import MetricsMiddleware
 from opensoar.middleware.rate_limit import RateLimitMiddleware
 from opensoar.api.ai import router as ai_router
 from opensoar.api.actions import router as actions_router
@@ -19,6 +20,7 @@ from opensoar.api.dashboard import router as dashboard_router
 from opensoar.api.health import router as health_router
 from opensoar.api.incidents import router as incidents_router
 from opensoar.api.integrations import router as integrations_router
+from opensoar.api.metrics import router as metrics_router
 from opensoar.api.observables import router as observables_router
 from opensoar.api.playbook_runs import router as runs_router
 from opensoar.api.playbooks import router as playbooks_router
@@ -83,7 +85,11 @@ configure_local_auth(
 )
 
 # ── Middleware ──────────────────────────────────────────────
+# Order matters: Starlette wraps middleware in reverse registration order,
+# so MetricsMiddleware (added last) is the outermost layer and records every
+# request regardless of whether the rate limiter short-circuits with a 429.
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
+app.add_middleware(MetricsMiddleware)
 
 # ── API routers (must be registered before static file catch-all) ────
 app.include_router(health_router, prefix="/api/v1")
@@ -100,6 +106,9 @@ app.include_router(ai_router, prefix="/api/v1")
 app.include_router(actions_router, prefix="/api/v1")
 app.include_router(api_keys_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
+
+# ── Prometheus scrape endpoint (no /api/v1 prefix) ──────────────────
+app.include_router(metrics_router)
 
 # ── Plugin discovery ────────────────────────────────────────────────
 load_optional_plugins(app)

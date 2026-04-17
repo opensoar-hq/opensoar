@@ -127,9 +127,11 @@ async def client(db_session_factory) -> AsyncGenerator[AsyncClient]:
 
     with patch("opensoar.main.get_trigger_engine", return_value=mock_engine):
         with patch("opensoar.main._trigger_engine", mock_engine):
+            from opensoar.middleware.metrics import reset_metrics
             from opensoar.middleware.rate_limit import reset_rate_limiter
 
             reset_rate_limiter()
+            reset_metrics()
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as c:
                 yield c

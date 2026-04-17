@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.18",
     "bcrypt>=4.2.0",
     "PyJWT>=2.9.0",
+    "prometheus-client>=0.21.0",
 ]
 
 [project.scripts]
