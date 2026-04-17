@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import get_current_analyst
 from opensoar.auth.rbac import Permission, require_permission
+from opensoar.integrations import cache as _cache_module
 from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.models.analyst import Analyst
 from opensoar.models.observable import Observable
@@ -171,3 +172,56 @@ async def add_enrichment(
     await session.commit()
     await session.refresh(obs)
     return ObservableResponse.model_validate(obs)
+
+
+@router.delete("/{observable_id}/enrichments/{source}")
+async def invalidate_observable_enrichment(
+    observable_id: uuid.UUID,
+    source: str,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.OBSERVABLES_MANAGE)),
+):
+    """Drop cached enrichment + stored record for ``(observable, source)``.
+
+    Useful when an upstream vendor's verdict has changed and analysts want to
+    re-enrich immediately. Tenant-scoped — the plugin access validators run
+    before any state changes.
+    """
+    result = await session.execute(
+        select(Observable).where(Observable.id == observable_id)
+    )
+    obs = result.scalar_one_or_none()
+    if not obs:
+        raise HTTPException(status_code=404, detail="Observable not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=obs,
+        resource_type="observable",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    cache = _cache_module.get_default_cache()
+    cleared = await cache.invalidate(source, obs.type, obs.value)
+
+    # Remove any stored enrichment entries for this source from the JSONB list.
+    current_enrichments = list(obs.enrichments or [])
+    remaining = [e for e in current_enrichments if e.get("source") != source]
+    removed_records = len(current_enrichments) - len(remaining)
+    obs.enrichments = remaining
+    if not remaining:
+        obs.enrichment_status = "pending"
+
+    await session.commit()
+    await session.refresh(obs)
+
+    return {
+        "observable_id": str(obs.id),
+        "source": source,
+        "cache_cleared": cleared,
+        "records_removed": removed_records,
+    }

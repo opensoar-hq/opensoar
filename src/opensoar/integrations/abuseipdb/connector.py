@@ -5,7 +5,10 @@ from typing import Any
 import aiohttp
 
 from opensoar.core.decorators import action
+from opensoar.integrations import cache as _cache_module
 from opensoar.integrations.base import ActionDefinition, HealthCheckResult, IntegrationBase
+
+_SOURCE = "abuseipdb"
 
 
 class AbuseIPDBIntegration(IntegrationBase):
@@ -56,10 +59,22 @@ class AbuseIPDBIntegration(IntegrationBase):
     async def check_ip(self, ip: str, max_age_days: int = 90) -> dict:
         if not self._client:
             raise RuntimeError("Not connected")
-        async with self._client.get(
-            "/check", params={"ipAddress": ip, "maxAgeInDays": str(max_age_days)}
-        ) as resp:
-            return await resp.json()
+
+        async def _fetch() -> dict:
+            async with self._client.get(
+                "/check", params={"ipAddress": ip, "maxAgeInDays": str(max_age_days)}
+            ) as resp:
+                return await resp.json()
+
+        # max_age_days is part of the semantic lookup; fold it into the key value.
+        cache_value = f"{ip}|maxAgeInDays={max_age_days}"
+        return await _cache_module.get_default_cache().get_or_fetch(
+            source=_SOURCE,
+            obs_type="ip",
+            value=cache_value,
+            fetcher=_fetch,
+            ttl_seconds=_cache_module.default_ttl_for(_SOURCE),
+        )
 
     async def disconnect(self) -> None:
         if self._client:

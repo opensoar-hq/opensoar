@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     llm_model: str | None = None
     debug: bool = False
 
+    # Enrichment cache TTLs (seconds). See opensoar.integrations.cache.
+    enrichment_cache_ttl_default: int = 3600
+    enrichment_cache_ttl_virustotal: int = 24 * 3600
+    enrichment_cache_ttl_abuseipdb: int = 12 * 3600
+    enrichment_cache_ttl_greynoise: int = 6 * 3600
+
     @property
     def playbook_directories(self) -> list[str]:
         return [d.strip() for d in self.playbook_dirs.split(",") if d.strip()]
