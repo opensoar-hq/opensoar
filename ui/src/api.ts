@@ -282,6 +282,7 @@ export interface TimelineEvent {
   alert_id: string | null
   incident_id: string | null
   metadata_json: Record<string, unknown> | null
+  mentions: string[]
 }
 
 export interface TimelineList {

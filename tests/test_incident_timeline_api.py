@@ -335,3 +335,35 @@ class TestIncidentTimelineTenantScoping:
         details = [event.get("detail") for event in events]
         assert "Allowed comment" in details
         assert "Blocked comment" not in details
+
+
+class TestIncidentTimelineMentions:
+    async def test_timeline_exposes_mentions_on_comment_events(
+        self, client, registered_analyst
+    ):
+        mentioned = f"mention_{uuid.uuid4().hex[:6]}"
+        await client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": mentioned,
+                "display_name": mentioned.title(),
+                "email": f"{mentioned}@opensoar.app",
+                "password": "testpassword123",
+            },
+        )
+
+        incident_id = await _create_incident(client, registered_analyst["headers"])
+        await client.post(
+            f"/api/v1/incidents/{incident_id}/comments",
+            json={"text": f"hey @{mentioned} take a look"},
+            headers=registered_analyst["headers"],
+        )
+
+        resp = await client.get(
+            f"/api/v1/incidents/{incident_id}/timeline?event_type=comment",
+            headers=registered_analyst["headers"],
+        )
+        assert resp.status_code == 200
+        events = resp.json()["events"]
+        assert len(events) == 1
+        assert events[0]["mentions"] == [mentioned.lower()]

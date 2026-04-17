@@ -61,6 +61,7 @@ class TimelineEvent(BaseModel):
     alert_id: uuid.UUID | None = None
     incident_id: uuid.UUID | None = None
     metadata_json: dict[str, Any] | None = None
+    mentions: list[str] = []
 
     model_config = {"from_attributes": True}
 
