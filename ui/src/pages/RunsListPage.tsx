@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { StatusBadge } from '@/components/ui/Badge'
 import { Select } from '@/components/ui/Select'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { QueryErrorState } from '@/components/ui/QueryErrorState'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Pagination } from '@/components/ui/Pagination'
 import { PageTransition } from '@/components/ui/PageTransition'
@@ -97,7 +98,7 @@ export function RunsListPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const limit = 50
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['runs', filters, page, selectedTenantId],
     queryFn: () => api.runs.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
@@ -140,7 +141,11 @@ export function RunsListPage() {
 
       {isLoading && <TableSkeleton rows={8} cols={7} />}
 
-      {!isLoading && (!data || data.runs.length === 0) && (
+      {!isLoading && isError && (
+        <QueryErrorState error={error} onRetry={() => { void refetch() }} />
+      )}
+
+      {!isLoading && !isError && (!data || data.runs.length === 0) && (
         <EmptyState icon={<Play size={32} />} title="No playbook runs" description="Runs will appear here when playbooks are triggered" />
       )}
 

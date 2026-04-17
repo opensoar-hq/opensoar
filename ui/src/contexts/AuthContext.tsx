@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
-import { api, type Analyst, type AuthCapabilities } from '@/api'
+import { api, onUnauthorized, type Analyst, type AuthCapabilities } from '@/api'
 
 interface AuthContextType {
   analyst: Analyst | null
@@ -60,6 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     localStorage.removeItem('opensoar_token')
     setAnalyst(null)
+  }, [])
+
+  // Any 401 from api.ts clears the session — RequireAuth then redirects to /login.
+  useEffect(() => {
+    return onUnauthorized(() => {
+      localStorage.removeItem('opensoar_token')
+      setAnalyst(null)
+    })
   }, [])
 
   return (

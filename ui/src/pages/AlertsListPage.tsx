@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/Checkbox'
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Pagination } from '@/components/ui/Pagination'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { QueryErrorState } from '@/components/ui/QueryErrorState'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
 import { PageTransition } from '@/components/ui/PageTransition'
@@ -198,7 +199,7 @@ export function AlertsListPage() {
 
   const selectionActive = selected.size > 0
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['alerts', filters, page, selectedTenantId],
     queryFn: () => api.alerts.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
@@ -293,7 +294,11 @@ export function AlertsListPage() {
 
       {isLoading && <TableSkeleton rows={8} cols={7} />}
 
-      {!isLoading && filteredAlerts.length === 0 && (
+      {!isLoading && isError && (
+        <QueryErrorState error={error} onRetry={() => { void refetch() }} />
+      )}
+
+      {!isLoading && !isError && filteredAlerts.length === 0 && (
         <EmptyState
           icon={<Shield size={32} />}
           title="No alerts found"

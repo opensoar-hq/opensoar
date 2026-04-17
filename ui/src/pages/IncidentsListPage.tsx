@@ -12,6 +12,7 @@ import { Table, TableHeader, TableBody, TableHead, TableCell, TableHeaderRow } f
 import { TableSkeleton } from '@/components/ui/Skeleton'
 import { Pagination } from '@/components/ui/Pagination'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { QueryErrorState } from '@/components/ui/QueryErrorState'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogBody, DialogFooter } from '@/components/ui/Dialog'
 import { PageTransition } from '@/components/ui/PageTransition'
 import { useToast } from '@/components/ui/Toast'
@@ -112,7 +113,7 @@ export function IncidentsListPage() {
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const limit = 50
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['incidents', filters, page, selectedTenantId],
     queryFn: () => api.incidents.list({ ...filters, tenant_id: selectedTenantId || undefined, limit, offset: page * limit }),
   })
@@ -237,7 +238,11 @@ export function IncidentsListPage() {
 
       {isLoading && <TableSkeleton rows={8} cols={6} />}
 
-      {!isLoading && incidents.length === 0 && (
+      {!isLoading && isError && (
+        <QueryErrorState error={error} onRetry={() => { void refetch() }} />
+      )}
+
+      {!isLoading && !isError && incidents.length === 0 && (
         <EmptyState
           icon={<Briefcase size={32} />}
           title="No incidents found"
