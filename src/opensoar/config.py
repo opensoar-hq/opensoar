@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     vt_api_key: str | None = None
     abuseipdb_api_key: str | None = None
     shodan_api_key: str | None = None
+    greynoise_api_key: str | None = None
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     ollama_url: str | None = None

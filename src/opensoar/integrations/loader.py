@@ -25,6 +25,7 @@ class IntegrationLoader:
             ("virustotal", "opensoar.integrations.virustotal.connector", "VirusTotalIntegration"),
             ("abuseipdb", "opensoar.integrations.abuseipdb.connector", "AbuseIPDBIntegration"),
             ("shodan", "opensoar.integrations.shodan.connector", "ShodanIntegration"),
+            ("greynoise", "opensoar.integrations.greynoise.connector", "GreyNoiseIntegration"),
             ("slack", "opensoar.integrations.slack.connector", "SlackIntegration"),
             ("email", "opensoar.integrations.email.connector", "EmailIntegration"),
             ("splunk", "opensoar.integrations.splunk.connector", "SplunkIntegration"),
