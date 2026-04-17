@@ -27,6 +27,7 @@ class IntegrationLoader:
             ("slack", "opensoar.integrations.slack.connector", "SlackIntegration"),
             ("email", "opensoar.integrations.email.connector", "EmailIntegration"),
             ("splunk", "opensoar.integrations.splunk.connector", "SplunkIntegration"),
+            ("msdefender", "opensoar.integrations.msdefender.connector", "MSDefenderIntegration"),
         ]
         for type_name, module_path, class_name in builtins:
             try:
