@@ -117,6 +117,48 @@ Alerts:
 {alerts_json}"""
 
 
+def build_recommendation_prompt(
+    alert: dict[str, Any],
+    observables: list[dict[str, Any]],
+    similar_alerts: list[dict[str, Any]],
+) -> str:
+    """Build a prompt that asks an LLM what a seasoned analyst would do next."""
+    alert_json = json.dumps(
+        {k: v for k, v in alert.items() if k not in ("id", "created_at", "updated_at")},
+        indent=2,
+        default=str,
+    )
+    observables_json = (
+        json.dumps(observables, indent=2, default=str) if observables else "(none)"
+    )
+    similar_json = (
+        json.dumps(similar_alerts, indent=2, default=str) if similar_alerts else "(none)"
+    )
+
+    return f"""You are a senior SOC analyst deciding the next action for an alert.
+
+Choose exactly ONE action from this vocabulary:
+- "isolate": quarantine the affected host from the network
+- "block": block the offending indicator (IP/domain/hash) at the perimeter
+- "enrich": gather more context before deciding (IOC lookups, user history, etc.)
+- "escalate": hand off to a human analyst or IR team
+- "resolve": close the alert as benign or already remediated
+
+Respond with ONLY a JSON object (no markdown, no prose) with these fields:
+- "action": one of "isolate", "block", "enrich", "escalate", "resolve"
+- "confidence": float between 0.0 and 1.0
+- "reasoning": 1-3 sentence justification grounded in the evidence below
+
+Alert under review:
+{alert_json}
+
+Linked observables and enrichments:
+{observables_json}
+
+Similar past alerts (same source_ip, for historical context):
+{similar_json}"""
+
+
 def build_correlation_prompt(alerts: list[dict[str, Any]]) -> str:
     """Build a prompt that groups related alerts into potential incidents."""
     alerts_json = json.dumps(alerts, indent=2, default=str)

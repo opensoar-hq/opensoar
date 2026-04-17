@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -15,14 +16,21 @@ from opensoar.ai.prompts import (
     build_auto_resolve_prompt,
     build_correlation_prompt,
     build_playbook_prompt,
+    build_recommendation_prompt,
     build_summarize_prompt,
     build_triage_prompt,
 )
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import require_analyst
+from opensoar.auth.rbac import Permission, require_permission
 from opensoar.config import settings
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
+from opensoar.models.observable import Observable
+from opensoar.schemas.ai import AiRecommendation, RecommendRequest
+
+ALLOWED_ACTIONS = {"isolate", "block", "enrich", "escalate", "resolve"}
+SIMILAR_ALERT_LIMIT = 5
 
 logger = logging.getLogger(__name__)
 
@@ -335,3 +343,142 @@ async def correlate_alerts(
         "groups": result_data.get("groups", []),
         "model": response.model,
     }
+
+
+def _normalize_confidence(raw: Any) -> float:
+    """Parse + clamp an LLM-reported confidence into [0.0, 1.0].
+
+    Accepts floats, ints, and percentage-style numbers. Values in (2, 100]
+    are treated as percentages and scaled by /100. Values just above 1.0
+    (e.g. 1.4) are treated as overconfident floats and clamped to 1.0 —
+    that is much more likely than a 1.4% confidence.
+    """
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    if value > 2.0 and value <= 100.0:
+        value = value / 100.0
+    if value < 0.0:
+        return 0.0
+    if value > 1.0:
+        return 1.0
+    return value
+
+
+@router.post("/recommend", response_model=AiRecommendation)
+async def recommend_action(
+    body: RecommendRequest,
+    session: AsyncSession = Depends(get_db),
+    _analyst: Analyst = Depends(require_permission(Permission.AI_USE)),
+) -> AiRecommendation:
+    """Ask the LLM what a seasoned analyst would do for this alert."""
+    client = get_llm_client()
+    if client is None:
+        raise HTTPException(
+            status_code=503,
+            detail="AI features not configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OLLAMA_URL.",
+        )
+
+    try:
+        alert_uuid = uuid.UUID(body.alert_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid alert_id") from None
+
+    result = await session.execute(select(Alert).where(Alert.id == alert_uuid))
+    alert = result.scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    # Linked observables + their enrichments
+    obs_result = await session.execute(
+        select(Observable).where(Observable.alert_id == alert_uuid)
+    )
+    observables = [
+        {
+            "type": obs.type,
+            "value": obs.value,
+            "source": obs.source,
+            "enrichment_status": obs.enrichment_status,
+            "enrichments": obs.enrichments or [],
+            "tags": obs.tags or [],
+        }
+        for obs in obs_result.scalars().all()
+    ]
+
+    # Similar past alerts by shared source_ip (top-N, newest first, excluding self)
+    similar: list[dict[str, Any]] = []
+    if alert.source_ip:
+        similar_result = await session.execute(
+            select(Alert)
+            .where(Alert.source_ip == alert.source_ip, Alert.id != alert_uuid)
+            .order_by(Alert.created_at.desc())
+            .limit(SIMILAR_ALERT_LIMIT)
+        )
+        similar = [
+            {
+                "id": str(s.id),
+                "title": s.title,
+                "severity": s.severity,
+                "status": s.status,
+                "determination": s.determination,
+                "rule_name": s.rule_name,
+            }
+            for s in similar_result.scalars().all()
+        ]
+
+    alert_data = {
+        "title": alert.title,
+        "severity": alert.severity,
+        "status": alert.status,
+        "description": alert.description,
+        "source_ip": alert.source_ip,
+        "dest_ip": alert.dest_ip,
+        "hostname": alert.hostname,
+        "rule_name": alert.rule_name,
+        "iocs": alert.iocs,
+        "tags": alert.tags,
+        "source": alert.source,
+    }
+
+    prompt = build_recommendation_prompt(alert_data, observables, similar)
+    response = await client.complete(
+        prompt,
+        system=(
+            "You are a senior SOC analyst. Recommend the single best next action. "
+            "Respond with JSON only."
+        ),
+        temperature=0.1,
+    )
+
+    content = (response.content or "").strip()
+    if content.startswith("```"):
+        content = content.strip("`")
+        if content.startswith("json"):
+            content = content[4:].strip()
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        logger.warning("recommend: LLM returned non-JSON output, falling back to escalate")
+        return AiRecommendation(
+            action="escalate",
+            confidence=0.0,
+            reasoning=f"Could not parse LLM response: {response.content[:500]}",
+        )
+
+    raw_action = parsed.get("action") if isinstance(parsed, dict) else None
+    action = raw_action if raw_action in ALLOWED_ACTIONS else "escalate"
+    confidence = _normalize_confidence(parsed.get("confidence", 0.0) if isinstance(parsed, dict) else 0.0)
+    reasoning = ""
+    if isinstance(parsed, dict):
+        reasoning = str(parsed.get("reasoning", "")).strip()
+    if not reasoning:
+        reasoning = "No reasoning provided by the model."
+    if raw_action not in ALLOWED_ACTIONS:
+        reasoning = (
+            f"Model returned unsupported action '{raw_action}'; defaulting to escalate. "
+            + reasoning
+        )
+
+    return AiRecommendation(action=action, confidence=confidence, reasoning=reasoning)
