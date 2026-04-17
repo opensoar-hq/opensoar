@@ -11,6 +11,29 @@ from opensoar.models.alert import Alert
 logger = logging.getLogger(__name__)
 
 
+async def _auto_enrich(session: AsyncSession, alert: Alert) -> None:
+    """Materialise observables for ``alert``'s IOCs and enqueue enrichment.
+
+    Every failure is swallowed: enrichment is a best-effort, fire-and-forget
+    side effect of ingest and must never block alert creation (issue #66).
+    The TTL-cache hook for issue #67 lives inside
+    ``opensoar.worker.enrichment.should_enrich``.
+    """
+    try:
+        # Imported lazily so test fixtures can monkey-patch the module cleanly
+        # and so the celery_app import only happens once we have work to do.
+        from opensoar.worker import enrichment as enrichment_mod
+
+        new_rows = await enrichment_mod.materialise_observables_for_alert(
+            session, alert
+        )
+        enrichment_mod.schedule_enrichment_for_alert(alert, new_rows)
+    except Exception:
+        logger.exception(
+            "Auto-enrichment failed for alert %s; ingest continuing", alert.id
+        )
+
+
 async def process_webhook(
     session: AsyncSession,
     payload: dict,
@@ -63,4 +86,8 @@ async def process_webhook(
         f"Ingested alert: id={alert.id} title='{alert.title}' "
         f"severity={alert.severity} source={source}"
     )
+
+    # Materialise observables from IOCs and fire-and-forget enrichment tasks.
+    await _auto_enrich(session, alert)
+
     return alert
