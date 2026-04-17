@@ -307,7 +307,7 @@ class TestRecommendEndpoint:
     ):
         """Endpoint surfaces historical alerts that share source_ip into the prompt."""
         # Seed two past alerts that share source_ip with the target alert.
-        shared_ip = "198.51.100.77"
+        shared_ip = "192.0.2.231"
         resp1 = await client.post(
             "/api/v1/webhooks/alerts",
             json={"rule_name": "Past malicious", "severity": "high", "source_ip": shared_ip},
