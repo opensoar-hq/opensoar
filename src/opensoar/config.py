@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     ollama_url: str | None = None
     llm_model: str | None = None
+    # Semantic alert deduplication (issue #81).
+    ai_embedding_provider: str | None = None
+    ai_embedding_model: str | None = None
+    ai_dedup_threshold: float = 0.85
+    ai_embedding_cache_ttl: int = 7 * 24 * 3600  # 7 days
     debug: bool = False
 
     # Enrichment cache TTLs (seconds). See opensoar.integrations.cache.
