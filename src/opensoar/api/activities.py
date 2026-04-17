@@ -63,6 +63,7 @@ async def list_alert_activities(
 async def add_comment(
     alert_id: uuid.UUID,
     body: CommentCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_analyst),
 ):
@@ -72,6 +73,16 @@ async def add_comment(
     ).scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     activity = Activity(
         alert_id=alert_id,
@@ -91,10 +102,27 @@ async def edit_comment(
     alert_id: uuid.UUID,
     comment_id: uuid.UUID,
     body: CommentUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_analyst),
 ):
     """Edit a comment. Only the author can edit. Stores edit history in metadata_json."""
+    alert = (
+        await session.execute(select(Alert).where(Alert.id == alert_id))
+    ).scalar_one_or_none()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="update",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
     activity = (
         await session.execute(
             select(Activity).where(
