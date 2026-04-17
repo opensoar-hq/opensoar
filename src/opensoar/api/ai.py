@@ -6,9 +6,9 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.ai.client import LLMClient
@@ -26,8 +26,11 @@ from opensoar.auth.rbac import Permission, require_permission
 from opensoar.config import settings
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
+from opensoar.models.anomaly import Anomaly
 from opensoar.models.observable import Observable
+from opensoar.plugins import apply_tenant_access_query
 from opensoar.schemas.ai import AiRecommendation, RecommendRequest
+from opensoar.schemas.anomaly import AnomalyList, AnomalyResponse
 
 ALLOWED_ACTIONS = {"isolate", "block", "enrich", "escalate", "resolve"}
 SIMILAR_ALERT_LIMIT = 5
@@ -482,3 +485,61 @@ async def recommend_action(
         )
 
     return AiRecommendation(action=action, confidence=confidence, reasoning=reasoning)
+
+
+@router.get("/anomalies", response_model=AnomalyList)
+async def list_anomalies(
+    request: Request,
+    kind: str | None = None,
+    partner: str | None = None,
+    rule_name: str | None = None,
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_analyst),
+):
+    """List recent anomaly signals produced by the background detector.
+
+    Results are tenant-scoped via registered plugin validators (same hook used
+    by the alerts/incidents endpoints).
+    """
+    query = select(Anomaly).order_by(Anomaly.created_at.desc())
+    count_query = select(func.count(Anomaly.id))
+
+    if kind:
+        query = query.where(Anomaly.kind == kind)
+        count_query = count_query.where(Anomaly.kind == kind)
+    if partner:
+        query = query.where(Anomaly.partner == partner)
+        count_query = count_query.where(Anomaly.partner == partner)
+    if rule_name:
+        query = query.where(Anomaly.rule_name == rule_name)
+        count_query = count_query.where(Anomaly.rule_name == rule_name)
+
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="anomaly",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    count_query = await apply_tenant_access_query(
+        request.app,
+        query=count_query,
+        resource_type="anomaly",
+        action="count",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    total = (await session.execute(count_query)).scalar() or 0
+    result = await session.execute(query.offset(offset).limit(limit))
+    anomalies = result.scalars().all()
+
+    return AnomalyList(
+        anomalies=[AnomalyResponse.model_validate(a) for a in anomalies],
+        total=total,
+    )
