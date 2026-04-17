@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Clock, Link2, Unlink, Shield, MessageSquare, Pencil, History, UserCheck, Users, Search } from 'lucide-react'
-import { api, type Alert, type Activity, type Analyst, type Observable } from '@/api'
+import { api, type Alert, type Analyst, type Observable, type TimelineEvent, type TimelineFilter } from '@/api'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Input, Label } from '@/components/ui/Input'
@@ -46,7 +46,7 @@ const ACTION_COLORS: Record<string, string> = {
 function IncidentTimelineEntry({
   activity, incidentId, isOwnComment,
 }: {
-  activity: Activity
+  activity: TimelineEvent
   incidentId: string
   isOwnComment: boolean
 }) {
@@ -57,9 +57,14 @@ function IncidentTimelineEntry({
   const [showHistory, setShowHistory] = useState(false)
 
   const editMutation = useMutation({
-    mutationFn: (text: string) => api.incidents.editComment(incidentId, activity.id, text),
+    mutationFn: (text: string) => {
+      if (activity.source === 'alert' && activity.alert_id) {
+        return api.alerts.editComment(activity.alert_id, activity.id, text)
+      }
+      return api.incidents.editComment(incidentId, activity.id, text)
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['incident-activities', incidentId] })
+      queryClient.invalidateQueries({ queryKey: ['incident-timeline', incidentId] })
       setEditing(false)
       toast.success('Comment updated')
     },
@@ -92,6 +97,11 @@ function IncidentTimelineEntry({
           <span className={cn('font-medium', isComment ? 'text-accent' : 'text-heading')}>
             {isComment ? (activity.analyst_username || 'System') : (ACTION_LABELS[activity.action] || activity.action)}
           </span>
+          {activity.source === 'alert' && (
+            <span className="px-1.5 py-0.5 text-[9px] uppercase tracking-wide rounded bg-surface-hover text-muted border border-border">
+              alert
+            </span>
+          )}
           <Tooltip content={formatDate(activity.created_at)}>
             <span className="text-muted">{timeAgo(activity.created_at)}</span>
           </Tooltip>
@@ -182,6 +192,7 @@ export function IncidentDetailPage() {
     value: '',
     source: '',
   })
+  const [timelineFilter, setTimelineFilter] = useState<TimelineFilter>('all')
 
   const { data: incident, isLoading } = useQuery({
     queryKey: ['incident', id],
@@ -195,9 +206,9 @@ export function IncidentDetailPage() {
     enabled: !!id,
   })
 
-  const { data: activities } = useQuery({
-    queryKey: ['incident-activities', id],
-    queryFn: () => api.incidents.activities(id!),
+  const { data: timeline } = useQuery({
+    queryKey: ['incident-timeline', id, timelineFilter],
+    queryFn: () => api.incidents.timeline(id!, { event_type: timelineFilter }),
     enabled: !!id,
   })
 
@@ -215,7 +226,7 @@ export function IncidentDetailPage() {
   const invalidateIncident = () => {
     queryClient.invalidateQueries({ queryKey: ['incident', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-alerts', id] })
-    queryClient.invalidateQueries({ queryKey: ['incident-activities', id] })
+    queryClient.invalidateQueries({ queryKey: ['incident-timeline', id] })
     queryClient.invalidateQueries({ queryKey: ['incident-observables', id] })
     queryClient.invalidateQueries({ queryKey: ['incidents'] })
   }
@@ -258,7 +269,7 @@ export function IncidentDetailPage() {
     mutationFn: (text: string) => api.incidents.addComment(id!, text),
     onSuccess: () => {
       setCommentText('')
-      queryClient.invalidateQueries({ queryKey: ['incident-activities', id] })
+      queryClient.invalidateQueries({ queryKey: ['incident-timeline', id] })
       toast.success('Comment added')
     },
     onError: () => toast.error('Failed to add comment'),
@@ -535,22 +546,46 @@ export function IncidentDetailPage() {
                 </Button>
               </div>
 
-              {(!activities || activities.total === 0) ? (
+              <div className="flex gap-1 mb-4" role="tablist" aria-label="Timeline filters">
+                {([
+                  { value: 'all', label: 'All' },
+                  { value: 'incident', label: 'Incident events' },
+                  { value: 'alert', label: 'Alert events' },
+                  { value: 'comment', label: 'Comments' },
+                ] as Array<{ value: TimelineFilter; label: string }>).map((chip) => (
+                  <button
+                    key={chip.value}
+                    role="tab"
+                    aria-selected={timelineFilter === chip.value}
+                    onClick={() => setTimelineFilter(chip.value)}
+                    className={cn(
+                      'px-2.5 py-1 text-[11px] rounded-full border cursor-pointer transition-colors',
+                      timelineFilter === chip.value
+                        ? 'bg-accent/10 border-accent/40 text-accent'
+                        : 'bg-transparent border-border text-muted hover:text-heading hover:border-border/60',
+                    )}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              {(!timeline || timeline.total === 0) ? (
                 <div className="text-center py-6">
-                  <div className="text-xs text-muted">No activity yet. Comments and incident lifecycle events will appear here.</div>
+                  <div className="text-xs text-muted">No activity yet. Comments, alert events, and incident lifecycle events will appear here.</div>
                 </div>
               ) : (
                 <div className="relative">
-                  {activities.activities.length > 1 && (
+                  {timeline.events.length > 1 && (
                     <div className="absolute left-[7px] top-4 bottom-4 w-px border-l-2 border-dashed border-border/40" />
                   )}
                   <div className="space-y-0">
-                    {activities.activities.map((activity) => (
+                    {timeline.events.map((event) => (
                       <IncidentTimelineEntry
-                        key={activity.id}
-                        activity={activity}
+                        key={event.id}
+                        activity={event}
                         incidentId={id!}
-                        isOwnComment={activity.action === 'comment' && analyst?.id === activity.analyst_id}
+                        isOwnComment={event.action === 'comment' && analyst?.id === event.analyst_id}
                       />
                     ))}
                   </div>

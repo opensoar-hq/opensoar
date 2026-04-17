@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
@@ -17,7 +17,14 @@ from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
 from opensoar.models.observable import Observable
-from opensoar.schemas.activity import ActivityList, ActivityResponse, CommentCreate, CommentUpdate
+from opensoar.schemas.activity import (
+    ActivityList,
+    ActivityResponse,
+    CommentCreate,
+    CommentUpdate,
+    TimelineEvent,
+    TimelineList,
+)
 from opensoar.schemas.alert import AlertResponse
 from opensoar.schemas.incident import (
     IncidentCreate,
@@ -653,6 +660,116 @@ async def list_incident_activities(
         activities=[ActivityResponse.model_validate(a) for a in activities],
         total=total,
     )
+
+
+@router.get("/{incident_id}/timeline", response_model=TimelineList)
+async def list_incident_timeline(
+    incident_id: uuid.UUID,
+    event_type: str = Query(default="all", pattern="^(all|alert|incident|comment)$"),
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst | None = Depends(get_current_analyst),
+):
+    """Return a merged chronology of the incident and its linked alerts.
+
+    Events cover incident lifecycle activity (creation, status/severity/assignment
+    changes, linking, comments, observables) and activities on every linked alert
+    (comments, playbook runs, status changes). Tenant scoping is enforced by
+    re-validating the incident and filtering the linked-alert set through the
+    registered tenant validators, matching the pattern used elsewhere in this
+    router so optional plugins can scope results.
+    """
+    incident = (
+        await session.execute(select(Incident).where(Incident.id == incident_id))
+    ).scalar_one_or_none()
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    await enforce_tenant_access(
+        request.app,
+        resource=incident,
+        resource_type="incident",
+        action="read",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+
+    # Resolve which linked alerts the caller may see so we don't leak activity
+    # from alerts that belong to other tenants.
+    linked_alert_query = (
+        select(Alert.id)
+        .join(IncidentAlert, IncidentAlert.alert_id == Alert.id)
+        .where(IncidentAlert.incident_id == incident_id)
+    )
+    linked_alert_query = await apply_tenant_access_query(
+        request.app,
+        query=linked_alert_query,
+        resource_type="alert",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    visible_alert_ids = list(
+        (await session.execute(linked_alert_query)).scalars().all()
+    )
+
+    # Combine activities on the incident with activities on the alerts the
+    # caller is allowed to see.
+    conditions = [Activity.incident_id == incident_id]
+    if visible_alert_ids:
+        conditions.append(Activity.alert_id.in_(visible_alert_ids))
+
+    base_where = or_(*conditions)
+
+    query = select(Activity).where(base_where)
+    count_query = select(func.count(Activity.id)).where(base_where)
+
+    if event_type == "alert":
+        query = query.where(Activity.alert_id.isnot(None))
+        count_query = count_query.where(Activity.alert_id.isnot(None))
+    elif event_type == "incident":
+        query = query.where(
+            Activity.incident_id == incident_id,
+            Activity.alert_id.is_(None),
+        )
+        count_query = count_query.where(
+            Activity.incident_id == incident_id,
+            Activity.alert_id.is_(None),
+        )
+    elif event_type == "comment":
+        query = query.where(Activity.action == "comment")
+        count_query = count_query.where(Activity.action == "comment")
+
+    query = query.order_by(Activity.created_at.desc()).offset(offset).limit(limit)
+
+    total = (await session.execute(count_query)).scalar() or 0
+    result = await session.execute(query)
+    activities = result.scalars().all()
+
+    events: list[TimelineEvent] = []
+    for activity in activities:
+        source = "alert" if activity.alert_id is not None else "incident"
+        events.append(
+            TimelineEvent(
+                id=activity.id,
+                source=source,
+                action=activity.action,
+                detail=activity.detail,
+                created_at=activity.created_at,
+                updated_at=activity.updated_at,
+                analyst_id=activity.analyst_id,
+                analyst_username=activity.analyst_username,
+                alert_id=activity.alert_id,
+                incident_id=activity.incident_id,
+                metadata_json=activity.metadata_json,
+            )
+        )
+
+    return TimelineList(events=events, total=total)
 
 
 @router.post("/{incident_id}/comments", response_model=ActivityResponse)
