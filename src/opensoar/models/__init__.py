@@ -3,6 +3,7 @@ from opensoar.models.activity import Activity
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.analyst_identity import AnalystIdentity
+from opensoar.models.anomaly import Anomaly
 from opensoar.models.api_key import ApiKey
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
@@ -18,6 +19,7 @@ __all__ = [
     "Alert",
     "Analyst",
     "AnalystIdentity",
+    "Anomaly",
     "ApiKey",
     "Incident",
     "IncidentAlert",
