@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { Briefcase, Clock, UserCheck, Plus, Link2, Globe } from 'lucide-react'
-import { api, type IncidentSuggestion } from '@/api'
+import { api, type IncidentSuggestion, type IncidentTemplate } from '@/api'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { SeverityBadge, StatusBadge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -26,7 +26,29 @@ function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () =>
     title: '',
     severity: 'medium',
     description: '',
+    templateId: '',
   })
+
+  const { data: templatesData } = useQuery({
+    queryKey: ['incident-templates'],
+    queryFn: () => api.incidentTemplates.list(),
+    enabled: open,
+  })
+  const templates: IncidentTemplate[] = templatesData?.templates ?? []
+
+  const applyTemplate = (templateId: string) => {
+    if (!templateId) {
+      setForm((f) => ({ ...f, templateId: '' }))
+      return
+    }
+    const tmpl = templates.find((t) => t.id === templateId)
+    if (!tmpl) return
+    setForm((f) => ({
+      ...f,
+      templateId,
+      severity: tmpl.default_severity || f.severity,
+    }))
+  }
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -34,12 +56,13 @@ function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () =>
         title: form.title,
         severity: form.severity,
         description: form.description || undefined,
+        template_id: form.templateId || undefined,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['incidents'] })
       toast.success('Incident created')
       onClose()
-      setForm({ title: '', severity: 'medium', description: '' })
+      setForm({ title: '', severity: 'medium', description: '', templateId: '' })
     },
     onError: (err) => {
       toast.error('Failed to create incident', err instanceof Error ? err.message : 'Unknown error')
@@ -53,6 +76,18 @@ function CreateIncidentDialog({ open, onClose }: { open: boolean; onClose: () =>
           <DialogTitle>Create Incident</DialogTitle>
         </DialogHeader>
         <DialogBody className="space-y-4">
+          <div>
+            <Label>Template</Label>
+            <Select
+              value={form.templateId}
+              onChange={(v) => applyTemplate(v)}
+              options={[
+                { value: '', label: 'No template' },
+                ...templates.map((t) => ({ value: t.id, label: t.name })),
+              ]}
+              className="w-full"
+            />
+          </div>
           <div>
             <Label>Title</Label>
             <Input

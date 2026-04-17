@@ -9,8 +9,9 @@ from pydantic import BaseModel
 class IncidentCreate(BaseModel):
     title: str
     description: str | None = None
-    severity: str = "medium"
+    severity: str | None = None
     tags: list[str] | None = None
+    template_id: uuid.UUID | None = None
 
 
 class IncidentUpdate(BaseModel):

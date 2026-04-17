@@ -19,7 +19,9 @@ from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
+from opensoar.models.incident_template import IncidentTemplate
 from opensoar.models.observable import Observable
+from opensoar.models.playbook import PlaybookDefinition
 from opensoar.schemas.activity import (
     ActivityList,
     ActivityResponse,
@@ -202,28 +204,93 @@ async def list_incidents(
 @router.post("", response_model=IncidentResponse, status_code=201)
 async def create_incident(
     data: IncidentCreate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_permission(Permission.INCIDENTS_CREATE)),
 ):
+    template: IncidentTemplate | None = None
+    if data.template_id is not None:
+        template = (
+            await session.execute(
+                select(IncidentTemplate).where(
+                    IncidentTemplate.id == data.template_id
+                )
+            )
+        ).scalar_one_or_none()
+        if template is None:
+            raise HTTPException(status_code=400, detail="Incident template not found")
+        await enforce_tenant_access(
+            request.app,
+            resource=template,
+            resource_type="incident_template",
+            action="read",
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
+
+    severity = data.severity if data.severity is not None else (
+        template.default_severity if template else "medium"
+    )
+    if data.tags is not None:
+        tags = data.tags
+    elif template is not None:
+        tags = list(template.default_tags or [])
+    else:
+        tags = None
+
     incident = Incident(
         title=data.title,
         description=data.description,
-        severity=data.severity,
-        tags=data.tags,
+        severity=severity,
+        tags=tags,
     )
     session.add(incident)
     await session.flush()
+    metadata: dict = {"incident_title": incident.title}
+    if template is not None:
+        metadata["template_id"] = str(template.id)
+        metadata["template_name"] = template.name
     _append_incident_activity(
         session,
         incident_id=incident.id,
         analyst=analyst,
         action="incident_created",
         detail=_incident_activity_detail("incident_created", incident.title),
-        metadata_json={"incident_title": incident.title},
+        metadata_json=metadata,
     )
     await session.commit()
     await session.refresh(incident)
+
+    if template is not None and template.playbook_ids:
+        await _trigger_template_playbooks(session, template)
+
     return await _incident_response(session, incident)
+
+
+async def _trigger_template_playbooks(
+    session: AsyncSession, template: IncidentTemplate
+) -> None:
+    """Dispatch the playbooks listed on a template via the Celery worker."""
+    from opensoar.worker.tasks import execute_playbook_task
+
+    ids: list[uuid.UUID] = []
+    for raw in template.playbook_ids or []:
+        try:
+            ids.append(uuid.UUID(str(raw)))
+        except (ValueError, AttributeError, TypeError):
+            continue
+    if not ids:
+        return
+    result = await session.execute(
+        select(PlaybookDefinition).where(PlaybookDefinition.id.in_(ids))
+    )
+    playbooks = {pb.id: pb for pb in result.scalars().all()}
+    for pid in ids:
+        pb = playbooks.get(pid)
+        if pb is None:
+            continue
+        execute_playbook_task.delay(pb.name, None)
 
 
 @router.get("/{incident_id}", response_model=IncidentResponse)

@@ -6,6 +6,7 @@ from opensoar.models.analyst_identity import AnalystIdentity
 from opensoar.models.api_key import ApiKey
 from opensoar.models.incident import Incident
 from opensoar.models.incident_alert import IncidentAlert
+from opensoar.models.incident_template import IncidentTemplate
 from opensoar.models.integration import IntegrationInstance
 from opensoar.models.observable import Observable
 from opensoar.models.playbook import PlaybookDefinition
@@ -20,6 +21,7 @@ __all__ = [
     "ApiKey",
     "Incident",
     "IncidentAlert",
+    "IncidentTemplate",
     "IntegrationInstance",
     "Observable",
     "PlaybookDefinition",
