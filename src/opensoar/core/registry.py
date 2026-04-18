@@ -73,6 +73,11 @@ class PlaybookRegistry:
             return True
 
         for key, expected in conditions.items():
+            if key not in alert_data:
+                logger.warning(
+                    "Trigger condition references field %r not present in alert data",
+                    key,
+                )
             actual = alert_data.get(key)
             if not self._condition_value_matches(expected, actual):
                 return False
