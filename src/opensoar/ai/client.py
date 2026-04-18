@@ -91,9 +91,10 @@ class LLMClient:
                     "content-type": "application/json",
                 },
             ) as resp:
-                data = await resp.json()
                 if resp.status != 200:
-                    raise RuntimeError(f"Anthropic API error: {data}")
+                    text = await resp.text()
+                    raise RuntimeError(f"Anthropic API error {resp.status}: {text}")
+                data = await resp.json()
                 return LLMResponse(
                     content=data["content"][0]["text"],
                     model=data.get("model", self.model),
@@ -123,9 +124,10 @@ class LLMClient:
                     "Content-Type": "application/json",
                 },
             ) as resp:
-                data = await resp.json()
                 if resp.status != 200:
-                    raise RuntimeError(f"OpenAI API error: {data}")
+                    text = await resp.text()
+                    raise RuntimeError(f"OpenAI API error {resp.status}: {text}")
+                data = await resp.json()
                 return LLMResponse(
                     content=data["choices"][0]["message"]["content"],
                     model=data.get("model", self.model),
@@ -150,6 +152,9 @@ class LLMClient:
                 f"{url}/api/generate",
                 json=body,
             ) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise RuntimeError(f"Ollama API error {resp.status}: {text}")
                 data = await resp.json()
                 return LLMResponse(
                     content=data.get("response", ""),
