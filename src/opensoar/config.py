@@ -1,5 +1,6 @@
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
+from sqlalchemy.engine import make_url
 
 
 class Settings(BaseSettings):
@@ -66,9 +67,8 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        return self.database_url.replace("+asyncpg", "+psycopg2").replace(
-            "postgresql+psycopg2", "postgresql"
-        )
+        url = make_url(self.database_url)
+        return str(url.set(drivername="postgresql"))
 
     @property
     def effective_celery_broker_url(self) -> str:
