@@ -125,6 +125,18 @@ async def client(db_session_factory) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_db] = override_get_db
 
+    # Wipe API keys so each test starts in webhook open mode unless it opts in.
+    # Without this, a key created by an earlier test leaks across the
+    # session-scoped DB and causes the #116 "keys exist → require key" check
+    # to reject unauthenticated webhook tests.
+    from sqlalchemy import delete
+
+    from opensoar.models.api_key import ApiKey
+
+    async with db_session_factory() as cleanup_sess:
+        await cleanup_sess.execute(delete(ApiKey))
+        await cleanup_sess.commit()
+
     with patch("opensoar.main.get_trigger_engine", return_value=mock_engine):
         with patch("opensoar.main._trigger_engine", mock_engine):
             from opensoar.middleware.metrics import reset_metrics
