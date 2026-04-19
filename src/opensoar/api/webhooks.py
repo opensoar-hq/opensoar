@@ -44,11 +44,16 @@ async def _validate_webhook_key(
     """Validate the API key and optional HMAC signature.
 
     - If no key is sent and no keys exist in the DB → open mode (allow).
-    - If no key is sent but keys exist → still allow (backward compat, will tighten later).
+    - If no key is sent but active keys exist → reject (401).
     - If a key is sent → it must be valid, active, and not expired, otherwise 401.
     - If X-Webhook-Signature is sent → verify HMAC-SHA256 of the body using the API key.
     """
     if api_key is None:
+        has_keys = (
+            await session.execute(select(ApiKey.id).where(ApiKey.is_active.is_(True)).limit(1))
+        ).scalar_one_or_none()
+        if has_keys is not None:
+            raise HTTPException(status_code=401, detail="API key required")
         return
 
     key_hash = hash_api_key(api_key)
