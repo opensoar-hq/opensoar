@@ -8,7 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.rbac import Permission, require_permission
+from opensoar.config import settings
 from opensoar.core.decorators import get_playbook_registry
+from opensoar.core.registry import PlaybookRegistry
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.playbook import PlaybookDefinition
@@ -16,6 +18,27 @@ from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.schemas.playbook import PlaybookResponse, PlaybookRunRequest, PlaybookUpdate
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
+
+
+@router.post("/reload")
+async def reload_playbooks(
+    session: AsyncSession = Depends(get_db),
+    analyst: Analyst = Depends(require_permission(Permission.PLAYBOOKS_MANAGE)),
+):
+    """Re-scan playbook directories and refresh the in-memory registry.
+
+    Clears the existing registry, re-imports modules from the configured
+    playbook directories, and syncs definitions to the database. This enables
+    hot-reload of playbooks without restarting the API (issue #112).
+
+    Note: in-flight playbook executions hold a reference to the old function
+    object and complete with the pre-reload code. New invocations use the
+    refreshed registry.
+    """
+    registry = PlaybookRegistry(settings.playbook_directories)
+    count = registry.clear_and_reload()
+    await registry.sync_to_db(session)
+    return {"count": count, "message": f"Reloaded {count} playbook(s)"}
 
 
 @router.get("", response_model=list[PlaybookResponse])

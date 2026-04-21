@@ -159,3 +159,159 @@ class TestPlaybookAPI:
         )
         assert resp.status_code == 200
         assert resp.json()["enabled"] is True
+
+
+class TestClearAndReload:
+    """Unit tests for the registry clear_and_reload helper (issue #112)."""
+
+    def test_clear_and_reload_refreshes_registry(self, tmp_path):
+        """Writing a playbook, reloading, mutating it, then reloading should
+        reflect the new metadata in the registry."""
+        import os
+
+        from opensoar.core.decorators import _PLAYBOOK_REGISTRY, get_playbook_registry
+
+        pb_dir = tmp_path / "reload_pbs"
+        pb_dir.mkdir()
+        (pb_dir / "__init__.py").write_text("")
+
+        pb_file = pb_dir / "sample_reload_pb.py"
+        pb_file.write_text(
+            "from opensoar import playbook\n"
+            "\n"
+            "@playbook(trigger='webhook', description='v1')\n"
+            "async def sample_reload_pb(alert):\n"
+            "    return {'version': 1}\n"
+        )
+        # Backdate the file so a second-resolution mtime change is visible
+        os.utime(pb_file, (1_000_000_000, 1_000_000_000))
+
+        # Ensure any prior entry is gone
+        _PLAYBOOK_REGISTRY.pop("sample_reload_pb", None)
+
+        registry = PlaybookRegistry([str(pb_dir)])
+        count = registry.clear_and_reload()
+        assert count >= 1
+        assert "sample_reload_pb" in get_playbook_registry()
+        assert get_playbook_registry()["sample_reload_pb"].meta.description == "v1"
+
+        # Mutate the playbook on disk (force a later mtime so source cache invalidates)
+        pb_file.write_text(
+            "from opensoar import playbook\n"
+            "\n"
+            "@playbook(trigger='webhook', description='v2')\n"
+            "async def sample_reload_pb(alert):\n"
+            "    return {'version': 2}\n"
+        )
+        os.utime(pb_file, (2_000_000_000, 2_000_000_000))
+
+        count = registry.clear_and_reload()
+        assert count >= 1
+        assert get_playbook_registry()["sample_reload_pb"].meta.description == "v2"
+
+        _PLAYBOOK_REGISTRY.pop("sample_reload_pb", None)
+
+    def test_clear_and_reload_drops_removed_playbooks(self, tmp_path):
+        """Playbooks that no longer exist on disk should be removed after reload."""
+        from opensoar.core.decorators import _PLAYBOOK_REGISTRY, get_playbook_registry
+
+        pb_dir = tmp_path / "reload_pbs_remove"
+        pb_dir.mkdir()
+        (pb_dir / "__init__.py").write_text("")
+
+        pb_file = pb_dir / "ephemeral_pb.py"
+        pb_file.write_text(
+            "from opensoar import playbook\n"
+            "\n"
+            "@playbook(trigger='webhook')\n"
+            "async def ephemeral_pb(alert):\n"
+            "    return {}\n"
+        )
+
+        _PLAYBOOK_REGISTRY.pop("ephemeral_pb", None)
+
+        registry = PlaybookRegistry([str(pb_dir)])
+        registry.clear_and_reload()
+        assert "ephemeral_pb" in get_playbook_registry()
+
+        # Delete the file and reload — registry should no longer contain it
+        pb_file.unlink()
+        registry.clear_and_reload()
+        assert "ephemeral_pb" not in get_playbook_registry()
+
+
+class TestReloadEndpoint:
+    """Integration tests for POST /api/v1/playbooks/reload (issue #112)."""
+
+    async def test_reload_requires_auth(self, client):
+        """Unauthenticated requests must be rejected."""
+        resp = await client.post("/api/v1/playbooks/reload")
+        assert resp.status_code == 401
+
+    async def test_reload_requires_admin(self, client, registered_analyst):
+        """Non-admin analysts lack PLAYBOOKS_MANAGE and must be rejected."""
+        resp = await client.post(
+            "/api/v1/playbooks/reload",
+            headers=registered_analyst["headers"],
+        )
+        assert resp.status_code == 403
+
+    async def test_reload_refreshes_registry(self, client, registered_admin, tmp_path, monkeypatch):
+        """Admin POST should re-scan the playbook dirs and return a count."""
+        import os
+
+        from opensoar.core.decorators import _PLAYBOOK_REGISTRY, get_playbook_registry
+
+        pb_dir = tmp_path / "endpoint_pbs"
+        pb_dir.mkdir()
+        (pb_dir / "__init__.py").write_text("")
+
+        pb_file = pb_dir / "endpoint_reload_pb.py"
+        pb_file.write_text(
+            "from opensoar import playbook\n"
+            "\n"
+            "@playbook(trigger='webhook', description='v1')\n"
+            "async def endpoint_reload_pb(alert):\n"
+            "    return {'version': 1}\n"
+        )
+        os.utime(pb_file, (1_000_000_000, 1_000_000_000))
+
+        _PLAYBOOK_REGISTRY.pop("endpoint_reload_pb", None)
+
+        # Point the endpoint at our temporary playbook dir
+        from opensoar.config import settings
+        monkeypatch.setattr(
+            type(settings),
+            "playbook_directories",
+            property(lambda self: [str(pb_dir)]),
+        )
+
+        resp = await client.post(
+            "/api/v1/playbooks/reload",
+            headers=registered_admin["headers"],
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "count" in body
+        assert body["count"] >= 1
+        assert "endpoint_reload_pb" in get_playbook_registry()
+        assert get_playbook_registry()["endpoint_reload_pb"].meta.description == "v1"
+
+        # Mutate on disk and reload again (force later mtime)
+        pb_file.write_text(
+            "from opensoar import playbook\n"
+            "\n"
+            "@playbook(trigger='webhook', description='v2')\n"
+            "async def endpoint_reload_pb(alert):\n"
+            "    return {'version': 2}\n"
+        )
+        os.utime(pb_file, (2_000_000_000, 2_000_000_000))
+
+        resp = await client.post(
+            "/api/v1/playbooks/reload",
+            headers=registered_admin["headers"],
+        )
+        assert resp.status_code == 200
+        assert get_playbook_registry()["endpoint_reload_pb"].meta.description == "v2"
+
+        _PLAYBOOK_REGISTRY.pop("endpoint_reload_pb", None)

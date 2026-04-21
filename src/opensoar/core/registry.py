@@ -37,6 +37,42 @@ class PlaybookRegistry:
             logger.info(f"  - {name} (trigger={pb.meta.trigger}, module={pb.module})")
         return registry
 
+    def clear_and_reload(self) -> int:
+        """Clear the in-memory playbook registry and re-discover playbooks.
+
+        Removes cached playbook modules from ``sys.modules`` so that edits on
+        disk are picked up, then wipes ``_PLAYBOOK_REGISTRY`` and re-scans the
+        configured playbook directories. Returns the number of playbooks
+        registered after the reload.
+
+        Note: in-flight executions hold a reference to the old function object
+        and will complete with the pre-reload code. New invocations use the
+        refreshed registry.
+        """
+        from opensoar.core.decorators import _PLAYBOOK_REGISTRY
+
+        module_prefixes = tuple(
+            Path(d).name
+            for d in self._playbook_dirs
+            if Path(d).name
+        )
+
+        if module_prefixes:
+            for mod_name in list(sys.modules):
+                if any(
+                    mod_name == prefix or mod_name.startswith(f"{prefix}.")
+                    for prefix in module_prefixes
+                ):
+                    del sys.modules[mod_name]
+
+        # Drop importlib's path/finder caches so edited files on disk are
+        # re-read (not served from a stale bytecode cache).
+        importlib.invalidate_caches()
+
+        _PLAYBOOK_REGISTRY.clear()
+        self.discover()
+        return len(get_playbook_registry())
+
     def _import_module(self, py_file: Path, base_dir: Path) -> None:
         relative = py_file.relative_to(base_dir.parent)
         module_name = str(relative.with_suffix("")).replace("/", ".").replace("\\", ".")
