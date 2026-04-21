@@ -154,9 +154,27 @@ async def get_alert_runs(
     query = select(PlaybookRun).where(PlaybookRun.alert_id == alert_id).order_by(
         PlaybookRun.created_at.desc()
     )
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="playbook_run",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    count_query = select(func.count(PlaybookRun.id)).where(PlaybookRun.alert_id == alert_id)
+    count_query = await apply_tenant_access_query(
+        request.app,
+        query=count_query,
+        resource_type="playbook_run",
+        action="count",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     result = await session.execute(query)
     runs = result.scalars().all()
-    count_query = select(func.count(PlaybookRun.id)).where(PlaybookRun.alert_id == alert_id)
     total = (await session.execute(count_query)).scalar() or 0
     return PlaybookRunList(
         runs=[PlaybookRunResponse.model_validate(r) for r in runs],
@@ -482,6 +500,7 @@ async def claim_alert(
 @router.post("/bulk", response_model=BulkOperationResult)
 async def bulk_update_alerts(
     body: BulkAlertUpdate,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_permission(Permission.ALERTS_UPDATE)),
 ):
@@ -490,9 +509,17 @@ async def bulk_update_alerts(
     failed = 0
     errors: list[str] = []
 
-    result = await session.execute(
-        select(Alert).where(Alert.id.in_(body.alert_ids))
+    query = select(Alert).where(Alert.id.in_(body.alert_ids))
+    query = await apply_tenant_access_query(
+        request.app,
+        query=query,
+        resource_type="alert",
+        action="bulk_update",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
+    result = await session.execute(query)
     alerts = {a.id: a for a in result.scalars().all()}
 
     for aid in body.alert_ids:
@@ -503,6 +530,16 @@ async def bulk_update_alerts(
             continue
 
         try:
+            # Per-record tenant guard for resource-level validators.
+            await enforce_tenant_access(
+                request.app,
+                resource=alert,
+                resource_type="alert",
+                action="bulk_update",
+                analyst=analyst,
+                request=request,
+                session=session,
+            )
             if body.action == "resolve":
                 if alert.status == "resolved":
                     continue

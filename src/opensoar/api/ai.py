@@ -28,7 +28,7 @@ from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
 from opensoar.models.anomaly import Anomaly
 from opensoar.models.observable import Observable
-from opensoar.plugins import apply_tenant_access_query
+from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 from opensoar.schemas.ai import AiRecommendation, RecommendRequest
 from opensoar.schemas.anomaly import AnomalyList, AnomalyResponse
 
@@ -74,8 +74,9 @@ class TriageRequest(BaseModel):
 @router.post("/summarize")
 async def summarize_alert(
     body: SummarizeRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_analyst),
+    analyst: Analyst = Depends(require_analyst),
 ):
     """Generate a natural language summary of an alert using an LLM."""
     client = get_llm_client()
@@ -91,6 +92,15 @@ async def summarize_alert(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="ai_summarize",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     alert_data = {
         "title": alert.title,
@@ -121,8 +131,9 @@ async def summarize_alert(
 @router.post("/triage")
 async def triage_alert(
     body: TriageRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_analyst),
+    analyst: Analyst = Depends(require_analyst),
 ):
     """Suggest severity and determination for an alert using an LLM."""
     client = get_llm_client()
@@ -138,6 +149,15 @@ async def triage_alert(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="ai_triage",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     alert_data = {
         "title": alert.title,
@@ -227,8 +247,9 @@ class AutoResolveRequest(BaseModel):
 @router.post("/auto-resolve")
 async def auto_resolve(
     body: AutoResolveRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_analyst),
+    analyst: Analyst = Depends(require_analyst),
 ):
     """Evaluate alerts for automatic resolution as benign."""
     client = get_llm_client()
@@ -243,6 +264,20 @@ async def auto_resolve(
         )
         alert = result.scalar_one_or_none()
         if alert:
+            # Skip alerts the caller can't access across tenants — they never
+            # reach the LLM so we don't leak metadata through the prompt.
+            try:
+                await enforce_tenant_access(
+                    request.app,
+                    resource=alert,
+                    resource_type="alert",
+                    action="ai_auto_resolve",
+                    analyst=analyst,
+                    request=request,
+                    session=session,
+                )
+            except HTTPException:
+                continue
             alerts_data.append({
                 "id": str(alert.id),
                 "title": alert.title,
@@ -301,8 +336,9 @@ class CorrelateRequest(BaseModel):
 @router.post("/correlate")
 async def correlate_alerts(
     body: CorrelateRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_analyst),
+    analyst: Analyst = Depends(require_analyst),
 ):
     """Use LLM reasoning to group related alerts into potential incidents."""
     client = get_llm_client()
@@ -316,6 +352,20 @@ async def correlate_alerts(
         )
         alert = result.scalar_one_or_none()
         if alert:
+            # Silently skip cross-tenant alerts so the LLM prompt never mixes
+            # data across tenant boundaries.
+            try:
+                await enforce_tenant_access(
+                    request.app,
+                    resource=alert,
+                    resource_type="alert",
+                    action="ai_correlate",
+                    analyst=analyst,
+                    request=request,
+                    session=session,
+                )
+            except HTTPException:
+                continue
             alerts_data.append({
                 "id": str(alert.id),
                 "title": alert.title,
@@ -372,8 +422,9 @@ def _normalize_confidence(raw: Any) -> float:
 @router.post("/recommend", response_model=AiRecommendation)
 async def recommend_action(
     body: RecommendRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_permission(Permission.AI_USE)),
+    analyst: Analyst = Depends(require_permission(Permission.AI_USE)),
 ) -> AiRecommendation:
     """Ask the LLM what a seasoned analyst would do for this alert."""
     client = get_llm_client()
@@ -392,11 +443,29 @@ async def recommend_action(
     alert = result.scalar_one_or_none()
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
-
-    # Linked observables + their enrichments
-    obs_result = await session.execute(
-        select(Observable).where(Observable.alert_id == alert_uuid)
+    await enforce_tenant_access(
+        request.app,
+        resource=alert,
+        resource_type="alert",
+        action="ai_recommend",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
+
+    # Linked observables + their enrichments — scope to tenant so the LLM
+    # never gets cross-tenant IOCs as context.
+    obs_query = select(Observable).where(Observable.alert_id == alert_uuid)
+    obs_query = await apply_tenant_access_query(
+        request.app,
+        query=obs_query,
+        resource_type="observable",
+        action="list",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
+    obs_result = await session.execute(obs_query)
     observables = [
         {
             "type": obs.type,
@@ -412,12 +481,22 @@ async def recommend_action(
     # Similar past alerts by shared source_ip (top-N, newest first, excluding self)
     similar: list[dict[str, Any]] = []
     if alert.source_ip:
-        similar_result = await session.execute(
+        similar_query = (
             select(Alert)
             .where(Alert.source_ip == alert.source_ip, Alert.id != alert_uuid)
             .order_by(Alert.created_at.desc())
             .limit(SIMILAR_ALERT_LIMIT)
         )
+        similar_query = await apply_tenant_access_query(
+            request.app,
+            query=similar_query,
+            resource_type="alert",
+            action="ai_recommend_similar",
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
+        similar_result = await session.execute(similar_query)
         similar = [
             {
                 "id": str(s.id),

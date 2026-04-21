@@ -3,13 +3,16 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.api.deps import get_db
 from opensoar.auth.jwt import require_analyst
 from opensoar.models.activity import Activity
+from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
+from opensoar.plugins import enforce_tenant_access
 from opensoar.schemas.action import (
     ActionExecuteRequest,
     ActionExecuteResponse,
@@ -59,6 +62,7 @@ async def list_available_actions(ioc_type: str | None = None):
 @router.post("/execute", response_model=ActionExecuteResponse)
 async def execute_action(
     body: ActionExecuteRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
     analyst: Analyst = Depends(require_analyst),
 ):
@@ -69,6 +73,26 @@ async def execute_action(
             ioc_value=body.ioc_value,
             status="failed",
             error=f"Unknown action: {body.action_name}",
+        )
+
+    # If the action is scoped to a specific alert, confirm the caller can access
+    # it before running the action or writing the audit activity.
+    if body.alert_id:
+        alert = (
+            await session.execute(
+                select(Alert).where(Alert.id == uuid.UUID(body.alert_id))
+            )
+        ).scalar_one_or_none()
+        if alert is None:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        await enforce_tenant_access(
+            request.app,
+            resource=alert,
+            resource_type="alert",
+            action="execute_action",
+            analyst=analyst,
+            request=request,
+            session=session,
         )
 
     # Execute the action

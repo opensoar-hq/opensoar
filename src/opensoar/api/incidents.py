@@ -715,12 +715,52 @@ async def list_incident_activities(
         session=session,
     )
 
-    query = (
-        select(Activity)
-        .where(Activity.incident_id == incident_id)
-        .order_by(Activity.created_at.desc())
+    # Scope alert-linked activities to alerts the caller may see. We look at
+    # every alert_id referenced by an activity on this incident (including
+    # alerts that were later unlinked so history is preserved) and run them
+    # through the tenant validator so foreign-tenant leaks are blocked even if
+    # the row is still visible for historical reasons.
+    referenced_alert_ids = list(
+        (
+            await session.execute(
+                select(Activity.alert_id)
+                .where(
+                    Activity.incident_id == incident_id,
+                    Activity.alert_id.isnot(None),
+                )
+                .distinct()
+            )
+        ).scalars().all()
     )
-    count_query = select(func.count(Activity.id)).where(Activity.incident_id == incident_id)
+    if referenced_alert_ids:
+        visible_alert_query = select(Alert.id).where(
+            Alert.id.in_(referenced_alert_ids)
+        )
+        visible_alert_query = await apply_tenant_access_query(
+            request.app,
+            query=visible_alert_query,
+            resource_type="alert",
+            action="list",
+            analyst=analyst,
+            request=request,
+            session=session,
+        )
+        visible_alert_ids = list(
+            (await session.execute(visible_alert_query)).scalars().all()
+        )
+    else:
+        visible_alert_ids = []
+
+    conditions = [
+        (Activity.incident_id == incident_id) & Activity.alert_id.is_(None)
+    ]
+    if visible_alert_ids:
+        conditions.append(Activity.alert_id.in_(visible_alert_ids))
+
+    base_where = or_(*conditions)
+
+    query = select(Activity).where(base_where).order_by(Activity.created_at.desc())
+    count_query = select(func.count(Activity.id)).where(base_where)
 
     total = (await session.execute(count_query)).scalar() or 0
     result = await session.execute(query.offset(offset).limit(limit))

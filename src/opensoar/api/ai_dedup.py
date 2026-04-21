@@ -15,7 +15,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +31,7 @@ from opensoar.config import settings
 from opensoar.integrations.cache import EnrichmentCache, get_default_cache
 from opensoar.models.alert import Alert
 from opensoar.models.analyst import Analyst
+from opensoar.plugins import apply_tenant_access_query, enforce_tenant_access
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +112,9 @@ async def _get_or_compute_embedding(
 @router.post("/deduplicate")
 async def deduplicate_alert(
     body: DeduplicateRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db),
-    _analyst: Analyst = Depends(require_permission(Permission.AI_USE)),
+    analyst: Analyst = Depends(require_permission(Permission.AI_USE)),
 ) -> dict[str, Any]:
     """Return near-duplicate candidate alerts for the requested alert id.
 
@@ -139,6 +141,17 @@ async def deduplicate_alert(
     ).scalar_one_or_none()
     if target is None:
         raise HTTPException(status_code=404, detail="Alert not found")
+    # Block cross-tenant lookups before spending an embedding round-trip — the
+    # LLM/embedding provider never sees the alert text unless the caller owns it.
+    await enforce_tenant_access(
+        request.app,
+        resource=target,
+        resource_type="alert",
+        action="ai_deduplicate",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
 
     cache = get_default_cache()
     threshold = (
@@ -149,12 +162,23 @@ async def deduplicate_alert(
 
     target_vector = await _get_or_compute_embedding(target, client, cache)
 
-    # Pull the most recent candidate corpus. Skip the target itself.
+    # Pull the most recent candidate corpus. Skip the target itself, and limit
+    # the corpus to alerts the caller is authorised to see — duplicate hits
+    # should never span tenant boundaries.
     corpus_query = (
         select(Alert)
         .where(Alert.id != target.id)
         .order_by(Alert.created_at.desc())
         .limit(DEDUP_CORPUS_LIMIT)
+    )
+    corpus_query = await apply_tenant_access_query(
+        request.app,
+        query=corpus_query,
+        resource_type="alert",
+        action="ai_deduplicate_corpus",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     corpus = (await session.execute(corpus_query)).scalars().all()
 
