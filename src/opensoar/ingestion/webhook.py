@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.ingestion.normalize import normalize_alert
+from opensoar.logging_context import generate_correlation_id, set_correlation_id
 from opensoar.models.alert import Alert
 
 logger = logging.getLogger(__name__)
@@ -57,13 +58,21 @@ async def process_webhook(
             existing.duplicate_count += 1
             existing.raw_payload = payload
             existing.normalized = normalized
+            # Back-fill for alerts ingested before the correlation-id
+            # migration so the trace chain is never blank going forward.
+            if existing.correlation_id is None:
+                existing.correlation_id = generate_correlation_id()
+            set_correlation_id(existing.correlation_id)
             await session.flush()
             logger.info(
                 f"Deduplicated alert: id={existing.id} source_id={source_id} "
-                f"count={existing.duplicate_count}"
+                f"count={existing.duplicate_count} "
+                f"correlation_id={existing.correlation_id}"
             )
             return existing
 
+    correlation_id = generate_correlation_id()
+    set_correlation_id(correlation_id)
     alert = Alert(
         source=normalized["source"],
         source_id=source_id,
@@ -80,13 +89,15 @@ async def process_webhook(
         iocs=normalized.get("iocs"),
         tags=normalized.get("tags"),
         partner=normalized.get("partner"),
+        correlation_id=correlation_id,
     )
     session.add(alert)
     await session.flush()
 
     logger.info(
         f"Ingested alert: id={alert.id} title='{alert.title}' "
-        f"severity={alert.severity} source={source}"
+        f"severity={alert.severity} source={source} "
+        f"correlation_id={alert.correlation_id}"
     )
 
     # Materialise observables from IOCs and fire-and-forget enrichment tasks.

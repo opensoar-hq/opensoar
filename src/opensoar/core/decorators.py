@@ -46,6 +46,10 @@ class ExecutionContext:
     alert_id: Any | None = None
     session: AsyncSession | None = None
     record_action: Callable | None = None
+    # correlation_id plumbed through from alert ingest for log tracing
+    # (issue #109).  Matches the alert's correlation_id or is freshly
+    # minted for manual runs.
+    correlation_id: Any | None = None
 
 
 _execution_context: ContextVar[ExecutionContext | None] = ContextVar(

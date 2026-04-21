@@ -14,6 +14,10 @@ from opensoar.core.decorators import (
     RegisteredPlaybook,
     set_execution_context,
 )
+from opensoar.logging_context import (
+    correlation_id_ctx,
+    generate_correlation_id,
+)
 from opensoar.middleware.metrics import record_playbook_run
 from opensoar.models.action_result import ActionResult
 from opensoar.models.alert import Alert
@@ -43,6 +47,25 @@ class PlaybookExecutor:
         if not pb_row:
             raise ValueError(f"Playbook '{playbook.meta.name}' not found in database")
 
+        # Resolve the correlation id BEFORE creating the run so the value
+        # sticks to the row.  Prefer (in order): the triggering alert's id,
+        # an already-set contextvar (e.g. from a sequence runner), or a
+        # freshly minted one for manual invocations.  This makes run.id
+        # distinct from correlation_id: runs are 1 per playbook, correlation
+        # ids are 1 per originating alert and span every run for it.
+        alert = None
+        if alert_id:
+            result = await self.session.execute(
+                select(Alert).where(Alert.id == alert_id)
+            )
+            alert = result.scalar_one_or_none()
+
+        correlation_id = (
+            (alert.correlation_id if alert and alert.correlation_id else None)
+            or correlation_id_ctx.get()
+            or generate_correlation_id()
+        )
+
         run = PlaybookRun(
             playbook_id=pb_row.id,
             alert_id=alert_id,
@@ -51,6 +74,7 @@ class PlaybookExecutor:
             sequence_total=sequence_total,
             status="running",
             started_at=datetime.now(timezone.utc),
+            correlation_id=correlation_id,
         )
         self.session.add(run)
         await self.session.flush()
@@ -70,6 +94,7 @@ class PlaybookExecutor:
                 output_data=kwargs.get("output_data"),
                 error=kwargs.get("error"),
                 attempt=kwargs.get("attempt", 1),
+                correlation_id=correlation_id,
             )
             self.session.add(action_result)
             await self.session.flush()
@@ -79,35 +104,40 @@ class PlaybookExecutor:
             alert_id=alert_id,
             session=self.session,
             record_action=record_action,
+            correlation_id=correlation_id,
         )
         set_execution_context(ctx)
+        cid_token = correlation_id_ctx.set(correlation_id)
 
         try:
-            alert = None
-            if alert_id:
-                result = await self.session.execute(
-                    select(Alert).where(Alert.id == alert_id)
-                )
-                alert = result.scalar_one_or_none()
-
             input_data = alert or manual_input or {}
             result = await playbook.func(input_data)
 
             run.status = "success"
             run.result = result if isinstance(result, dict) else {"result": result}
-            logger.info(f"Playbook '{playbook.meta.name}' completed successfully (run={run.id})")
+            logger.info(
+                f"Playbook '{playbook.meta.name}' completed successfully "
+                f"(run={run.id}, correlation_id={correlation_id})"
+            )
 
         except asyncio.CancelledError:
             run.status = "cancelled"
-            logger.warning(f"Playbook '{playbook.meta.name}' was cancelled (run={run.id})")
+            logger.warning(
+                f"Playbook '{playbook.meta.name}' was cancelled "
+                f"(run={run.id}, correlation_id={correlation_id})"
+            )
 
         except Exception as e:
             run.status = "failed"
             run.error = str(e)
-            logger.exception(f"Playbook '{playbook.meta.name}' failed (run={run.id})")
+            logger.exception(
+                f"Playbook '{playbook.meta.name}' failed "
+                f"(run={run.id}, correlation_id={correlation_id})"
+            )
 
         finally:
             set_execution_context(None)
+            correlation_id_ctx.reset(cid_token)
             run.finished_at = datetime.now(timezone.utc)
             await self.session.commit()
 

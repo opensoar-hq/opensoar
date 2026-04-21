@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,6 +19,10 @@ class Alert(Base):
     status: Mapped[str] = mapped_column(String(20), default="new")
     raw_payload: Mapped[dict] = mapped_column(JSONB, default=dict)
     normalized: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # correlation_id is assigned at ingest and propagated through the
+    # playbook -> action -> notification chain for end-to-end tracing
+    # (issue #109).  Nullable so alerts predating the migration remain valid.
+    correlation_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
     source_ip: Mapped[str | None] = mapped_column(String(45))
     dest_ip: Mapped[str | None] = mapped_column(String(45))
     hostname: Mapped[str | None] = mapped_column(String(255))

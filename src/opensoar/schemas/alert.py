@@ -26,6 +26,7 @@ class AlertResponse(BaseModel):
     assigned_to: uuid.UUID | None = None
     assigned_username: str | None = None
     duplicate_count: int = 1
+    correlation_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
 
