@@ -140,6 +140,15 @@ async def dashboard_stats(
     # Totals
     total_alerts = sum(alerts_by_severity.values())
     total_runs_q = select(func.count(PlaybookRun.id))
+    total_runs_q = await apply_tenant_access_query(
+        request.app,
+        query=total_runs_q,
+        resource_type="playbook_run",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     total_runs = (await session.execute(total_runs_q)).scalar() or 0
 
     # Open alerts count (new + in_progress)
@@ -183,6 +192,15 @@ async def dashboard_stats(
     # Active runs (running/pending)
     active_runs_q = select(func.count(PlaybookRun.id)).where(
         PlaybookRun.status.in_(["running", "pending"])
+    )
+    active_runs_q = await apply_tenant_access_query(
+        request.app,
+        query=active_runs_q,
+        resource_type="playbook_run",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
     )
     active_runs = (await session.execute(active_runs_q)).scalar() or 0
 
@@ -237,6 +255,15 @@ async def dashboard_stats(
 
     # Recent runs
     recent_runs_q = select(PlaybookRun).order_by(PlaybookRun.created_at.desc()).limit(5)
+    recent_runs_q = await apply_tenant_access_query(
+        request.app,
+        query=recent_runs_q,
+        resource_type="playbook_run",
+        action="dashboard_stats",
+        analyst=analyst,
+        request=request,
+        session=session,
+    )
     recent_runs = (await session.execute(recent_runs_q)).scalars().all()
 
     # Unassigned open alerts count
