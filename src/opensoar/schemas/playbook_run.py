@@ -18,6 +18,7 @@ class ActionResultResponse(BaseModel):
     output_data: dict[str, Any] | None = None
     error: str | None = None
     attempt: int
+    correlation_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 
@@ -29,6 +30,7 @@ class PlaybookRunResponse(BaseModel):
     sequence_id: uuid.UUID | None = None
     sequence_position: int | None = None
     sequence_total: int | None = None
+    correlation_id: uuid.UUID | None = None
     status: str
     started_at: datetime | None = None
     finished_at: datetime | None = None

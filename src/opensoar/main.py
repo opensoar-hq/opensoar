@@ -32,13 +32,26 @@ from opensoar.config import settings
 from opensoar.core.registry import PlaybookRegistry
 from opensoar.core.triggers import TriggerEngine
 from opensoar.db import async_session
+from opensoar.logging_context import CorrelationIdFilter
 from opensoar.plugins import configure_local_auth, initialize_plugin_state, load_optional_plugins
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s %(levelname)-8s %(name)s [%(module)s:%(funcName)s] %(message)s",
+    format=(
+        "%(asctime)s %(levelname)-8s %(name)s "
+        "[%(module)s:%(funcName)s] [cid=%(correlation_id)s] %(message)s"
+    ),
     datefmt="%Y-%m-%dT%H:%M:%S%z",
 )
+
+# Install the correlation-id filter on the root logger so every handler
+# (stdlib basicConfig, uvicorn, celery) gets the id stamped onto records
+# without each module having to attach the filter itself (issue #109).
+_correlation_filter = CorrelationIdFilter()
+logging.getLogger().addFilter(_correlation_filter)
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_correlation_filter)
+
 logger = logging.getLogger(__name__)
 
 _registry: PlaybookRegistry | None = None

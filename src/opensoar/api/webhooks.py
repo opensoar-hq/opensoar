@@ -142,6 +142,7 @@ async def receive_alert(
 
     return WebhookResponse(
         alert_id=alert.id,
+        correlation_id=alert.correlation_id,
         title=alert.title,
         severity=alert.severity,
         playbooks_triggered=playbook_names,
@@ -174,6 +175,7 @@ async def receive_elastic_alert(
 
     return WebhookResponse(
         alert_id=alert.id,
+        correlation_id=alert.correlation_id,
         title=alert.title,
         severity=alert.severity,
         playbooks_triggered=playbook_names,

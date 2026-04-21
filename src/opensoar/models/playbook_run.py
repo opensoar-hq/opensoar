@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,10 @@ class PlaybookRun(Base):
     sequence_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     sequence_position: Mapped[int | None] = mapped_column(Integer)
     sequence_total: Mapped[int | None] = mapped_column(Integer)
+    # Correlation id inherited from the triggering alert (or freshly minted
+    # for manual runs) so every log line during execution can be traced
+    # back to the alert that kicked it off (issue #109).
+    correlation_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
 
     action_results: Mapped[list["ActionResult"]] = relationship(
         "ActionResult", back_populates="run", lazy="selectin"
