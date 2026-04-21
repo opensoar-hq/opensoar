@@ -50,7 +50,10 @@ def purge_retention_task(self, dry_run: bool = False) -> dict[str, Any]:
         result = _run_async(_execute_purge(dry_run))
         logger.info("Retention purge result: %s", result)
         return result
-    except Exception as exc:  # pragma: no cover - retry path
+    # Retention queries can fail with a DB outage, lock timeouts or a
+    # partitioning change we did not account for. Any ``Exception`` is a
+    # valid retry trigger for this Celery-beat task.
+    except Exception as exc:  # noqa: BLE001 - Celery retry path  # pragma: no cover
         logger.exception("Retention purge failed")
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
 

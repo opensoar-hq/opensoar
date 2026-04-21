@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -55,7 +56,7 @@ class ElasticIntegration(IntegrationBase):
                         details={"version": data.get("version", {}).get("number")},
                     )
                 return HealthCheckResult(healthy=False, message=f"HTTP {resp.status}")
-        except Exception as e:
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:
             return HealthCheckResult(healthy=False, message=str(e))
 
     def get_actions(self) -> list[ActionDefinition]:

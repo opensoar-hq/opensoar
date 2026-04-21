@@ -77,7 +77,17 @@ class IntegrationLoader:
                             self._connectors[type_name] = obj
                             logger.info(f"Loaded external integration: {type_name}")
                             break
-            except Exception:
+            # External connector files can fail to import for the same
+            # reasons as playbook modules (syntax, import, attribute errors).
+            except (
+                SyntaxError,
+                ImportError,
+                AttributeError,
+                NameError,
+                TypeError,
+                ValueError,
+                OSError,
+            ):
                 logger.exception(f"Failed to load integration from {connector_file}")
 
     def register(self, type_name: str, connector_cls: type) -> None:

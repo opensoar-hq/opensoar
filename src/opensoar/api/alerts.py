@@ -597,7 +597,11 @@ async def bulk_update_alerts(
                 continue
 
             updated += 1
-        except Exception as e:
+        # Bulk operations iterate over many alerts; one bad row must not
+        # abort the whole batch. We deliberately track per-row failures in
+        # ``errors`` rather than raise — logged implicitly via the response
+        # body the UI surfaces to operators.
+        except Exception as e:  # noqa: BLE001 - per-row isolation in bulk op
             failed += 1
             errors.append(f"Alert {aid}: {e}")
 

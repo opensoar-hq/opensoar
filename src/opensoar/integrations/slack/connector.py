@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -41,7 +42,7 @@ class SlackIntegration(IntegrationBase):
                     if data.get("ok"):
                         return HealthCheckResult(healthy=True, message="OK")
                     return HealthCheckResult(healthy=False, message=data.get("error", "Unknown"))
-            except Exception as e:
+            except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:
                 return HealthCheckResult(healthy=False, message=str(e))
 
         return HealthCheckResult(healthy=True, message="Webhook configured (cannot verify)")

@@ -6,6 +6,7 @@ Exposes alert, machine, and indicator operations used by playbooks.
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -94,7 +95,7 @@ class MSDefenderIntegration(IntegrationBase):
                 if resp.status == 200:
                     return HealthCheckResult(healthy=True, message="OK")
                 return HealthCheckResult(healthy=False, message=f"HTTP {resp.status}")
-        except Exception as e:  # pragma: no cover - exercised via mocking if needed
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:  # pragma: no cover - exercised via mocking if needed
             return HealthCheckResult(healthy=False, message=str(e))
 
     # ── actions metadata ────────────────────────────────────

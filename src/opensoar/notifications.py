@@ -69,7 +69,11 @@ async def dispatch_mention_notifications(
                 result = hook(notification)
                 if inspect.isawaitable(result):
                     await result
-            except Exception:  # pragma: no cover - defensive
+            # Hook registry is a plugin surface: we deliberately isolate one
+            # misbehaving sink from the rest of the comment write path. Any
+            # ``Exception`` subclass is fine to log-and-continue; BaseException
+            # still propagates.
+            except Exception:  # noqa: BLE001 - isolate plugin hooks  # pragma: no cover
                 logger.exception(
                     "Mention notification hook %r raised", hook
                 )

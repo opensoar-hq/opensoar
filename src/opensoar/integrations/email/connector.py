@@ -27,7 +27,9 @@ class EmailIntegration(IntegrationBase):
             with smtplib.SMTP(host, port, timeout=10) as server:
                 server.ehlo()
                 return HealthCheckResult(healthy=True, message="SMTP connection OK")
-        except Exception as e:
+        # smtplib raises SMTPException and its subclasses for protocol-level
+        # failures; OSError covers the underlying socket problems.
+        except (smtplib.SMTPException, OSError, KeyError) as e:
             return HealthCheckResult(healthy=False, message=str(e))
 
     def get_actions(self) -> list[ActionDefinition]:

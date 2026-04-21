@@ -173,7 +173,10 @@ def execute_playbook_task(self, playbook_name: str, alert_id: str | None = None)
         result = _run_async(_execute(playbook_name, alert_id))
         logger.info(f"Playbook '{playbook_name}' finished: {result}")
         return result
-    except Exception as e:
+    # Celery task retry path — playbooks execute arbitrary user code so any
+    # subclass of ``Exception`` is a legitimate retry trigger. ``BaseException``
+    # (SystemExit, KeyboardInterrupt) still propagates to shut the worker down.
+    except Exception as e:  # noqa: BLE001 - retry path for arbitrary user code
         logger.exception(f"Playbook '{playbook_name}' failed")
         raise self.retry(exc=e, countdown=2**self.request.retries)
 
@@ -191,6 +194,8 @@ def execute_playbook_sequence_task(self, playbook_names: list[str], alert_id: st
         result = _run_async(_execute_sequence(playbook_names, alert_id))
         logger.info(f"Playbook sequence finished: {result}")
         return result
-    except Exception as e:
+    # Celery task retry path — sequences run arbitrary user code. See the
+    # single-playbook task above for the same rationale.
+    except Exception as e:  # noqa: BLE001 - retry path for arbitrary user code
         logger.exception("Playbook sequence failed")
         raise self.retry(exc=e, countdown=2**self.request.retries)

@@ -268,7 +268,11 @@ def get_default_cache() -> EnrichmentCache:
         from opensoar.config import settings
 
         backend: CacheBackend = RedisCacheBackend(settings.redis_url)
-    except Exception:  # pragma: no cover - defensive fallback
+    # Realistic failure modes when constructing the Redis client proxy:
+    # ImportError (redis package missing), ValueError (malformed URL),
+    # OSError (DNS lookup fails during URL parsing). Anything else is a
+    # bug we want to see.
+    except (ImportError, ValueError, OSError):  # pragma: no cover - defensive fallback
         logger.exception(
             "enrichment_cache.redis_unavailable falling back to in-memory"
         )

@@ -100,7 +100,10 @@ async def execute_action(
         result = await _run_action(body.action_name, body.ioc_type, body.ioc_value)
         status = "success"
         error = None
-    except Exception as e:
+    # Manual actions call into arbitrary integrations (VirusTotal, AbuseIPDB,
+    # DNS, WHOIS) that can fail in many ways — record the failure on the
+    # response rather than returning HTTP 500.
+    except Exception as e:  # noqa: BLE001 - manual action wraps third-party calls
         logger.exception(f"Action {body.action_name} failed for {body.ioc_value}")
         result = None
         status = "failed"
@@ -157,7 +160,9 @@ async def _run_action(action_name: str, ioc_type: str, ioc_value: str) -> dict:
             }
         except ImportError:
             return {"info": f"WHOIS lookup for {ioc_value} (python-whois not installed)"}
-        except Exception as e:
+        # python-whois raises a mix of socket / parse errors; wrap the common
+        # ones so operators see something useful instead of a 500.
+        except (OSError, ValueError, AttributeError, TypeError) as e:
             return {"info": f"WHOIS lookup for {ioc_value}", "error": str(e)}
 
     elif action_name == "dns_resolve":

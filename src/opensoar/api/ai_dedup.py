@@ -186,7 +186,16 @@ async def deduplicate_alert(
     for candidate in corpus:
         try:
             cand_vector = await _get_or_compute_embedding(candidate, client, cache)
-        except Exception:  # pragma: no cover - defensive
+        # Embedding provider outages, rate-limits, and JSON decode errors
+        # must not abort the whole dedup run — skip the candidate and move
+        # on. Programming bugs (TypeError / AttributeError) will still
+        # surface since they are not listed here.
+        except (
+            OSError,
+            RuntimeError,
+            ValueError,
+            json.JSONDecodeError,
+        ):  # pragma: no cover - defensive
             logger.exception(
                 "ai_dedup.embedding_failed alert_id=%s", candidate.id
             )

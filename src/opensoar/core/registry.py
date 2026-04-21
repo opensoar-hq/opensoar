@@ -87,7 +87,20 @@ class PlaybookRegistry:
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
                 logger.debug(f"Imported playbook module: {module_name}")
-        except Exception:
+        # Playbook authors ship arbitrary Python; realistic failures are
+        # SyntaxError (bad code), ImportError (missing deps), AttributeError /
+        # NameError / TypeError / ValueError at import time. Keep signal loud
+        # with logger.exception but never let one bad playbook stop discovery
+        # of the rest.
+        except (
+            SyntaxError,
+            ImportError,
+            AttributeError,
+            NameError,
+            TypeError,
+            ValueError,
+            OSError,
+        ):
             logger.exception(f"Failed to import playbook module: {py_file}")
 
     def get_playbooks_for_trigger(

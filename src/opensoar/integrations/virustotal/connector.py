@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -39,7 +40,7 @@ class VirusTotalIntegration(IntegrationBase):
                 if resp.status == 200:
                     return HealthCheckResult(healthy=True, message="OK")
                 return HealthCheckResult(healthy=False, message=f"HTTP {resp.status}")
-        except Exception as e:
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:
             return HealthCheckResult(healthy=False, message=str(e))
 
     def get_actions(self) -> list[ActionDefinition]:
