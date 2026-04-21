@@ -18,6 +18,8 @@ This module is intentionally decoupled from the rest of the ingest path:
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import time
 import uuid
@@ -25,6 +27,7 @@ from collections.abc import Callable, Iterable
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from opensoar.models.integration import IntegrationInstance
@@ -33,6 +36,15 @@ from opensoar.worker.celery_app import celery_app
 from opensoar.worker.tasks import _run_async
 
 logger = logging.getLogger(__name__)
+
+# ``redis`` is an optional runtime dependency. Import its base error class so
+# the narrow ``except`` tuples below can reference it — fall back to a stand-in
+# that is never raised when the library is absent.
+try:
+    from redis.exceptions import RedisError as _RedisError  # type: ignore
+except ImportError:  # pragma: no cover - redis is a declared dep in prod
+    class _RedisError(Exception):  # type: ignore[no-redef]
+        """Sentinel used when the optional ``redis`` package is missing."""
 
 
 # ── In-flight deduplication ──────────────────────────────────────────────────
@@ -60,7 +72,11 @@ def _get_redis_client():  # pragma: no cover - exercised only with live Redis
         from opensoar.config import settings
 
         return redis.Redis.from_url(settings.redis_url, socket_timeout=0.5)
-    except Exception:
+    # Redis may be missing entirely (ImportError), the URL may be malformed
+    # (ValueError) or the socket may refuse (OSError / RedisError). In all
+    # cases we silently fall back to the in-memory tracker.
+    except (ImportError, ValueError, OSError) as exc:
+        logger.debug("Redis client unavailable (%s); using in-memory fallback", exc)
         return None
 
 
@@ -76,7 +92,11 @@ def _mark_inflight(obs_type: str, obs_value: str, partner: str | None) -> bool:
             # SET NX EX is atomic: claim only if the key does not exist.
             claimed = client.set(name=key, value="1", nx=True, ex=INFLIGHT_TTL_SECONDS)
             return bool(claimed)
-        except Exception as exc:  # pragma: no cover - logged, falls back
+        # redis-py raises RedisError (and subclasses like ConnectionError /
+        # TimeoutError) for all wire-level failures. OSError covers lower
+        # level socket errors. Everything else (TypeError, AttributeError on
+        # our own code) should surface.
+        except (OSError, _RedisError) as exc:  # pragma: no cover - logged, falls back
             logger.debug("Redis in-flight check failed (%s); using in-memory fallback", exc)
 
     # In-memory fallback: expire stale entries, then claim if absent.
@@ -97,7 +117,9 @@ def _clear_inflight(obs_type: str, obs_value: str, partner: str | None) -> None:
     if client is not None:
         try:
             client.delete(key)
-        except Exception:  # pragma: no cover
+        except (OSError, _RedisError):  # pragma: no cover
+            # Cleanup is best-effort — a failed delete leaves the key to
+            # expire naturally via ``INFLIGHT_TTL_SECONDS``.
             pass
 
     _memory_inflight.pop(key, None)
@@ -112,7 +134,8 @@ def reset_inflight_tracker() -> None:
     try:  # pragma: no cover - depends on running Redis
         for key in client.scan_iter("opensoar:enrich:inflight:*"):
             client.delete(key)
-    except Exception:
+    except (OSError, _RedisError):
+        # Reset is a test hook — a Redis outage during cleanup is acceptable.
         pass
 
 
@@ -185,7 +208,10 @@ async def should_enrich(
         sources = await _configured_sources_for(
             session, observable.type, partner
         )
-    except Exception:  # pragma: no cover - defensive
+    # DB read failure while computing the skip-list must degrade to "enqueue"
+    # rather than block enrichment. SQLAlchemyError covers driver disconnects,
+    # operational errors and query mistakes against the integrations table.
+    except SQLAlchemyError:  # pragma: no cover - defensive
         logger.exception(
             "should_enrich: failed to query configured sources; defaulting to enqueue"
         )
@@ -199,19 +225,26 @@ async def should_enrich(
 
     try:
         cache = get_default_cache()
-    except Exception:  # pragma: no cover - defensive
+    # Cache-factory failures are transport/config issues (bad Redis URL,
+    # unreachable host, malformed json in the backend). A bug in the factory
+    # itself (TypeError, AttributeError) should still surface.
+    except (OSError, _RedisError, ValueError):  # pragma: no cover - defensive
         logger.exception("should_enrich: cache unavailable; defaulting to enqueue")
         return True
 
     for source in sources:
         try:
             cached = await cache.get(source, observable.type, observable.value)
-        except Exception:  # pragma: no cover - defensive
-            logger.exception(
-                "should_enrich: cache lookup failed for %s:%s:%s; enqueue",
+        # Cache lookup errors we must tolerate: Redis wire errors, socket
+        # failures, json decode failures. Anything else (TypeError etc.) is a
+        # programming bug and should surface.
+        except (OSError, _RedisError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "should_enrich: cache lookup failed for %s:%s:%s (%s); enqueue",
                 source,
                 observable.type,
                 observable.value,
+                exc,
             )
             return True
         if cached is None:
@@ -246,7 +279,10 @@ async def enqueue_enrichment(
             from opensoar.middleware.metrics import record_enrichment_cache_skip
 
             record_enrichment_cache_skip(observable.type)
-        except Exception:  # pragma: no cover - metrics must never break ingest
+        # Metrics import / label lookup mismatches are the realistic failures;
+        # we don't want a missing prometheus_client, a registry reset race
+        # (KeyError) or a bad label type (ValueError) to break ingest.
+        except (ImportError, KeyError, ValueError):  # pragma: no cover
             logger.exception("Failed to record enrichment cache skip metric")
         return False
 
@@ -266,7 +302,11 @@ async def enqueue_enrichment(
             partner,
         )
         return True
-    except Exception:  # pragma: no cover - defensive
+    # Broker-side failures are the realistic case: TCP errors (ConnectionError
+    # / TimeoutError are subclasses of OSError), kombu connection issues, a
+    # mis-rendered routing key (KeyError / ValueError). Programming bugs
+    # inside ``enrich_observable_task.delay`` itself should surface.
+    except (OSError, ConnectionError, TimeoutError, KeyError, ValueError):
         logger.exception(
             "Failed to enqueue enrichment task for observable %s", observable.id
         )
@@ -330,9 +370,15 @@ async def _lookup_with_instance(
     instance: IntegrationInstance,
     observable: Observable,
 ) -> dict[str, Any] | None:
+    # Connectors construct and connect against third-party SDKs. Config,
+    # connect, and lookup can all fail for network, auth, or input reasons —
+    # we log and skip rather than abort the other sources. The catch tuple
+    # below is deliberately broad enough to cover aiohttp / httpx / asyncio
+    # errors while still letting programming-bug categories (MemoryError,
+    # SystemExit, KeyboardInterrupt) propagate.
     try:
         connector = connector_cls(instance.config)
-    except Exception as exc:
+    except (ValueError, TypeError, KeyError, AttributeError) as exc:
         logger.warning(
             "Skipping %s enrichment (config error): %s", instance.integration_type, exc
         )
@@ -340,7 +386,7 @@ async def _lookup_with_instance(
 
     try:
         await connector.connect()
-    except Exception as exc:
+    except (OSError, ValueError, RuntimeError, asyncio.TimeoutError) as exc:
         logger.warning(
             "Skipping %s enrichment (connect failed): %s",
             instance.integration_type,
@@ -358,7 +404,13 @@ async def _lookup_with_instance(
             "malicious": False,
             "score": None,
         }
-    except Exception as exc:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        asyncio.TimeoutError,
+        json.JSONDecodeError,
+    ) as exc:
         logger.warning(
             "%s lookup failed for %s:%s: %s",
             instance.integration_type,
@@ -370,7 +422,9 @@ async def _lookup_with_instance(
     finally:
         try:
             await connector.disconnect()
-        except Exception:  # pragma: no cover
+        except (OSError, RuntimeError):  # pragma: no cover
+            # Disconnect failures are cosmetic — the lookup already produced
+            # (or failed to produce) its result before this runs.
             pass
 
 
@@ -418,7 +472,16 @@ async def _run_enrichment(
 
         try:
             new_entries = await _dispatch_enrichments(session, obs)
-        except Exception:
+        # Dispatch failures we must tolerate: DB errors (SQLAlchemyError),
+        # connector runtime errors, I/O errors and timeouts. Mark the
+        # observable failed and return — this is fire-and-forget.
+        except (
+            SQLAlchemyError,
+            OSError,
+            RuntimeError,
+            ValueError,
+            asyncio.TimeoutError,
+        ):
             logger.exception(
                 "Enrichment dispatch failed for %s:%s", obs_type, obs_value
             )
@@ -484,7 +547,12 @@ def enrich_observable_task(
 
     try:
         return _run_async(_run())
-    except Exception:
+    # Outermost safety net for a Celery fire-and-forget task: re-raising
+    # here would trigger broker retries we explicitly disabled
+    # (``max_retries=0``) and surface as a dropped observable status. Keep
+    # the broad catch scoped to ``Exception`` (not ``BaseException``) so
+    # SystemExit / KeyboardInterrupt still propagate.
+    except Exception:  # noqa: BLE001 - intentional outer safety net, see comment
         logger.exception(
             "enrich_observable_task crashed for %s; swallowing", observable_id
         )
@@ -575,7 +643,11 @@ async def schedule_enrichment_for_alert(
     for obs in observables:
         try:
             await enqueue_enrichment(session, obs, partner=alert.partner)
-        except Exception:  # pragma: no cover - defensive
+        # Ingest must never block on an enrichment-scheduling bug — this is
+        # the outer safety net covering any uncaught failure bubbling up
+        # from ``enqueue_enrichment``. Logged loudly with ``logger.exception``
+        # so the real cause is always visible.
+        except Exception:  # noqa: BLE001 - ingest safety net (issue #66); see comment  # pragma: no cover
             logger.exception(
                 "Unexpected error while scheduling enrichment for %s", obs.id
             )

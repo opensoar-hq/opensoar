@@ -218,7 +218,17 @@ async def check_integration_health(
             message = check.message
             details = check.details
             await connector.disconnect()
-        except Exception as e:
+        # Health checks probe third-party services over HTTP/SMTP/etc.
+        # Network errors (OSError), malformed config (ValueError / KeyError),
+        # connector runtime errors (RuntimeError) and timeouts all map to
+        # "unhealthy" in the UI. Programming errors still surface.
+        except (
+            OSError,
+            ValueError,
+            KeyError,
+            RuntimeError,
+            TimeoutError,
+        ) as e:
             health_status = "unhealthy"
             message = str(e)
             details = None

@@ -134,7 +134,11 @@ def action(
                         )
                     raise
 
-                except Exception as e:
+                # Actions wrap arbitrary user code — the decorator's job is
+                # to retry/record-and-reraise any failure, not to classify
+                # it. ``BaseException`` (Ctrl-C, SystemExit) still bubbles up
+                # so worker shutdown isn't swallowed mid-retry.
+                except Exception as e:  # noqa: BLE001 - actions run arbitrary user code
                     last_error = str(e)
                     if attempt <= meta.retries:
                         await asyncio.sleep(meta.retry_backoff**attempt)

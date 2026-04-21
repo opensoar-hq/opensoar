@@ -187,5 +187,8 @@ class Scheduler:
                 job["last_run"] = time.monotonic()
                 job["last_tick_id"] = tick_id
                 logger.debug(f"Scheduler: ran job '{name}'")
-            except Exception:
+            # Scheduler tick must never crash the loop — one failing job must
+            # not prevent every subsequent job from running. Scoped to
+            # ``Exception`` so Ctrl-C / SystemExit still stops the loop.
+            except Exception:  # noqa: BLE001 - isolate one job from the others
                 logger.exception(f"Scheduler: job '{name}' failed")

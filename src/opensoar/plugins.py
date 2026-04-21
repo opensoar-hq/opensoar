@@ -130,7 +130,19 @@ def load_optional_plugins(app: FastAPI, group: str = PLUGIN_GROUP) -> list[str]:
             plugin(app)
             loaded_plugins.append(plugin_ep.name)
             logger.info("Loaded optional plugin: %s", plugin_ep.name)
-        except Exception:
+        # Narrow to the realistic failure modes for third-party plugin loading:
+        # ImportError/ModuleNotFoundError (missing deps), AttributeError (plugin
+        # drops/renames an expected attribute between releases), TypeError
+        # (plugin factory signature mismatch), ValueError (plugin self-validates
+        # its config and rejects it). Programming errors in core (e.g.
+        # KeyboardInterrupt, SystemExit) continue to propagate.
+        except (
+            ImportError,
+            AttributeError,
+            TypeError,
+            ValueError,
+            OSError,
+        ):
             logger.exception("Failed to load optional plugin: %s", plugin_ep.name)
 
     return loaded_plugins

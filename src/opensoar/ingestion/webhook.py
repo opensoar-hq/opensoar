@@ -31,7 +31,11 @@ async def _auto_enrich(session: AsyncSession, alert: Alert) -> None:
         await enrichment_mod.schedule_enrichment_for_alert(
             session, alert, new_rows
         )
-    except Exception:
+    # Ingest-path safety net (issue #66): enrichment is a best-effort side
+    # effect and must never block alert creation, even when the enrichment
+    # subsystem's own safety nets leak something novel. Logged loudly so the
+    # real cause is visible in operator dashboards.
+    except Exception:  # noqa: BLE001 - ingest safety net; see comment
         logger.exception(
             "Auto-enrichment failed for alert %s; ingest continuing", alert.id
         )

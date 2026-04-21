@@ -127,7 +127,11 @@ class PlaybookExecutor:
                 f"(run={run.id}, correlation_id={correlation_id})"
             )
 
-        except Exception as e:
+        # Playbooks are arbitrary user code loaded at runtime. Any of its
+        # actions can raise anything — the executor's job is to record the
+        # failure on the run row and keep going. ``BaseException`` (Ctrl-C,
+        # SystemExit) still propagates so the worker can shut down cleanly.
+        except Exception as e:  # noqa: BLE001 - playbooks run arbitrary user code
             run.status = "failed"
             run.error = str(e)
             logger.exception(

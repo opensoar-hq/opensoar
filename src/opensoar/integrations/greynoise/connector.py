@@ -7,6 +7,7 @@ from issue #67 (default 6h, configurable via
 """
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import aiohttp
@@ -58,7 +59,7 @@ class GreyNoiseIntegration(IntegrationBase):
                 return HealthCheckResult(
                     healthy=False, message=f"HTTP {resp.status}"
                 )
-        except Exception as e:  # pragma: no cover - defensive
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:  # pragma: no cover - defensive
             return HealthCheckResult(healthy=False, message=str(e))
 
     def get_actions(self) -> list[ActionDefinition]:

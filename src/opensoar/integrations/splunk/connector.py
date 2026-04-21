@@ -76,7 +76,7 @@ class SplunkIntegration(IntegrationBase):
                         details={"version": version or ""},
                     )
                 return HealthCheckResult(healthy=False, message=f"HTTP {resp.status}")
-        except Exception as e:  # pragma: no cover - network failure path
+        except (aiohttp.ClientError, OSError, asyncio.TimeoutError) as e:  # pragma: no cover - network failure path
             return HealthCheckResult(healthy=False, message=str(e))
 
     def get_actions(self) -> list[ActionDefinition]:
